@@ -9,6 +9,10 @@ build** (`herdr <group> --help`). Config: `~/AppData/Roaming/herdr/`.
 > Golden rule: the chief drives staff **only** through `herdr`. Sub-agents are summoned
 > by staff inside their own harness — never by the chief.
 
+> **`herdr` supersedes `agtx`.** Some projects' own docs still reference an older `agtx`
+> board/worktree workflow — that is **retired**. Orchestrate everything through `herdr`;
+> where a project still names agtx, mark it for cleanup in its `projects/<name>/overview.md`.
+
 ## Targets
 
 A staff agent is addressed by any of: its **terminal id** (`term_...`), its **pane id**

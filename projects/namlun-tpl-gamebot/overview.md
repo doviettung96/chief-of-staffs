@@ -4,7 +4,12 @@
 
 ## About
 
-Initial repository anchor for Harbor/agtx task worktrees.
+_TODO: what namlun-tpl-gamebot actually is. (The seeded line described Harbor/agtx
+tooling, not the project — replaced.)_
+
+> ⚠ **CLEANUP:** the project's README anchors it to **Harbor/agtx** worktrees.
+> **agtx is outdated** — orchestrate via **herdr** now
+> (see [`../../docs/herdr.md`](../../docs/herdr.md)). Update the project's docs to drop agtx.
 
 ## Vision
 

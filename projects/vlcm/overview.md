@@ -4,7 +4,13 @@
 
 ## About
 
-This checkout is being evaluated under **agtx**. Use agtx as the board and execution owner for multi-agent work: tasks live on the agtx board, execution runs in agtx-created worktrees and tmux panes, and Review is the human merge gate.
+_TODO: what vlcm actually is. (The seeded line here described agtx tooling, not the
+project — replaced.)_
+
+> ⚠ **CLEANUP:** vlcm's own `AGENTS.md` still points at **agtx** (agtx board + agtx
+> worktrees/tmux) as the multi-agent owner. **agtx is outdated** — this project is
+> orchestrated via **herdr** now (see [`../../docs/herdr.md`](../../docs/herdr.md)).
+> Update the project's `AGENTS.md` to drop the agtx workflow.
 
 ## Vision
 
