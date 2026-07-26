@@ -1,0 +1,13 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Local, machine-specific agent scratch
+.workflow/
+
+# Generated skill symlinks (source of truth is .skills.config; regenerate with
+# sync-skills.py). The links hold absolute, machine-specific targets.
+.claude/skills/
