@@ -7,10 +7,11 @@
 _TODO: what vlcm actually is. (The seeded line here described agtx tooling, not the
 project — replaced.)_
 
-> ⚠ **CLEANUP:** vlcm's own `AGENTS.md` still points at **agtx** (agtx board + agtx
-> worktrees/tmux) as the multi-agent owner. **agtx is outdated** — this project is
-> orchestrated via **herdr** now (see [`../../docs/herdr.md`](../../docs/herdr.md)).
-> Update the project's `AGENTS.md` to drop the agtx workflow.
+> ⚠ **CLEANUP (in progress):** vlcm's own `AGENTS.md` pointed at **agtx** as the
+> multi-agent owner. **agtx is retired** — this project is orchestrated via **herdr**
+> now (see [`../../docs/herdr.md`](../../docs/herdr.md)). PR open to drop the agtx
+> sections: doviettung96/vlcm-gamebot#18. Follow-up left: migrate the runtime-target
+> config off the legacy `.agtx/` directory name in `scripts/shared/target_runtime.py`.
 
 ## Vision
 

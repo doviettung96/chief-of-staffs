@@ -7,9 +7,10 @@
 _TODO: what namlun-tpl-gamebot actually is. (The seeded line described Harbor/agtx
 tooling, not the project — replaced.)_
 
-> ⚠ **CLEANUP:** the project's README anchors it to **Harbor/agtx** worktrees.
-> **agtx is outdated** — orchestrate via **herdr** now
-> (see [`../../docs/herdr.md`](../../docs/herdr.md)). Update the project's docs to drop agtx.
+> ⚠ **CLEANUP (in progress):** the project's README anchored it to **Harbor/agtx**
+> worktrees. **agtx is retired** — orchestrate via **herdr** now
+> (see [`../../docs/herdr.md`](../../docs/herdr.md)). PR open to drop the agtx framing:
+> doviettung96/namlun-tpl-gamebot#36.
 
 ## Vision
 
