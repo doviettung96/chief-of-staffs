@@ -76,25 +76,56 @@ herdr worktree remove --workspace <id>   # remove the worktree (after merge)
 
 ## The spawn-to-teardown sequence (one staff task)
 
+_This sequence is verified — it is exactly the loop the chief ran end-to-end to build
+`scripts/board.py`. The commented steps are the ones that bit in practice._
+
 ```bash
-# 1. Isolate
-WT=$(herdr worktree create --cwd C:/Users/Tung/Projects/<proj> \
-      --branch feat/<task> --base <integration-branch> --json | jq -r .result.worktrees...path)
-# 2. Spawn (pick lane per docs/agents.md)
-herdr agent start <task> --cwd "$WT" -- claude
-# 3. Brief
+# 1. Isolate (plain git worktree is fine when the chief edits directly; use
+#    `herdr worktree create` when you want it opened as a herdr workspace too)
+git -C C:/Users/Tung/Projects/<proj> worktree add "$WT" -b feat/<task> <integration-branch>
+
+# 2. Spawn (pick lane per docs/agents.md; --no-focus so it doesn't grab the owner's screen)
+herdr agent start <task> --cwd "$WT" --no-focus -- claude
+
+# 3. Boot: wait for idle, then clear the FIRST-RUN TRUST PROMPT.
 herdr agent wait <task> --status idle --timeout 120000
-herdr agent send <task> "GOAL: ...  SCOPE: ...  DONE WHEN: ...  Open a PR when green."
-# 4. Watch — loop over `herdr agent list`; on `blocked`, read + decide or escalate
-# 5. Integrate — see docs/git-worktrees.md (verify PR mergeable, decide order, merge, build)
-# 6. Teardown
-herdr worktree remove --workspace <id>
+herdr agent read <task> --lines 20          # a fresh claude asks "trust this folder?" — option 1
+herdr pane send-keys <pane_id> Enter        # accept (it's your own worktree)
+
+# 4. Brief — send the text, THEN submit with Enter (agent send does NOT press Enter).
+herdr agent send <task> "GOAL: ...  SCOPE: ...  DONE WHEN: ...  <commit / open a PR>"
+herdr pane send-keys <pane_id> Enter
+
+# 5. Watch — confirm it's working, then block until it finishes or blocks.
+herdr agent wait <task> --status working --timeout 30000
+herdr agent wait <task> --status idle --timeout 300000
+
+# 6. Verify for real — do NOT trust the pane. Check the worktree git state and run the
+#    deliverable yourself (an API error can cut a staff off mid-task, before its commit).
+git -C "$WT" log --oneline -2 ; git -C "$WT" status --short
+#    If DONE WHEN is unmet, nudge the staff to finish (send + Enter) rather than doing it silently.
+
+# 7. Integrate — see docs/git-worktrees.md; build/verify from the MERGED result.
+
+# 8. Teardown
+herdr pane close <pane_id>
+git -C C:/Users/Tung/Projects/<proj> worktree remove --force "$WT"   # may need a retry — see gotchas
 ```
 
 ## Notes / gotchas
 
-- `agent send` is literal text — it does **not** press Enter for a shell; use `pane run`
-  for shell command lines. For a chat agent (claude/codex prompt), `agent send` is right.
+- **`agent send` writes literal text and does NOT submit.** For a chat agent (claude/codex),
+  send the text then `herdr pane send-keys <pane_id> Enter`. For a shell line, use `pane run`
+  (command + Enter). This bit during the dry-run — the brief sat unsent until Enter.
+- **Fresh staff hit a trust-folder prompt.** A new claude in a new worktree asks
+  "Is this a project you trust?" — option 1 is pre-selected, so `pane send-keys <pane> Enter`.
+  It's the chief's own worktree, so this is a decide-on-evidence, not an escalate.
+- **Verify state, not the pane.** A staff can report progress and still be cut off by an
+  `API Error: Connection closed mid-response` before committing. Always check `git log`/`status`
+  in the worktree and run the deliverable before integrating.
+- **`worktree remove` right after `pane close` can fail with `Permission denied`** — the
+  just-exited agent process still holds a handle. Retry once (or `rm -rf` the path then
+  `git worktree prune`).
 - Pane ids can churn as the workspace changes; re-run `herdr agent list` to re-resolve a
   target rather than caching a pane id across a long session.
 - The **owner's live session** already runs many agents (see `herdr agent list`). When the
