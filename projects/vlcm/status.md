@@ -101,7 +101,7 @@ C:/Users/Tung/Projects/vlcm 2b8a2cf [feat/zodiac-dungeon]
 ```
 
 ## Open PRs
-_No open PRs._
+- #18 Retire agtx workflow in favor of herdr `chore/retire-agtx` — mergeable=MERGEABLE
 
 ## Live herdr agents
 _No herdr agents currently on this project._

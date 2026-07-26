@@ -42,6 +42,7 @@
 ?? notes/stall_q4.png
 ?? notes/tracker2.png
 ?? notes/tracker_zoom.png
+?? notes/tungace01_field.png
 ?? notes/tungace01_login.png
 ?? notes/tungace01_login2.png
 ?? notes/walk_talk.png
@@ -67,6 +68,7 @@ C:/Users/Tung/AppData/Local/Temp/claude/C--Users-Tung-Projects-game-automation-p
 ```
 
 ## Open PRs
+- #36 Drop Harbor/agtx framing from README `chore/retire-agtx` — mergeable=MERGEABLE
 - #35 Star-field farming on gap-host (warp-in packs) `feat/star-farm-on-gap-host` — mergeable=MERGEABLE *(draft)*
 
 ## Live herdr agents

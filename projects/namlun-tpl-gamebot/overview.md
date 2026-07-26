@@ -1,11 +1,14 @@
 # namlun-tpl-gamebot
 
-> Human-owned. Created once by sync-project.py; never overwritten. Keep it current.
+> Human-owned. `About`/`Current focus` filled from repo evidence on 2026-07-26;
+> `Vision` is a **draft candidate** — confirm/adjust. Never overwritten by sync.
 
 ## About
 
-_TODO: what namlun-tpl-gamebot actually is. (The seeded line described Harbor/agtx
-tooling, not the project — replaced.)_
+A **GAP-hosted autofarm bot**. Phase 5 retired the hand-written `app/` host and moved
+everything onto **gap-host**; features include normal + star-field farming behind one
+Auto-farm toggle, resilient auto-login (world-select via `WorldSelectPopup`), and
+canonical maintenance verbs (`item.use` / `item.bag_scan` / `shop.buy`).
 
 > ⚠ **CLEANUP (in progress):** the project's README anchored it to **Harbor/agtx**
 > worktrees. **agtx is retired** — orchestrate via **herdr** now
@@ -14,13 +17,19 @@ tooling, not the project — replaced.)_
 
 ## Vision
 
-_Where this project is headed, and why it matters. TODO._
+_Draft (confirm):_ a zero-hand-written-host autofarm — every farming, maintenance, and
+login behavior expressed as gap-host capabilities/verbs, so the bot inherits reliability
+and orchestration from GAP and this repo carries only game-specific reversing.
 
 ## Current focus
 
-_What the chief of staff should be pushing on right now. TODO._
+Phase 5 consolidation on gap-host (#30 merged) plus canonical maintenance verbs
+(`item.use`/`bag_scan`/`shop.buy`) and **star-field farming on gap-host** (draft PR #35);
+`ext.star_fields` now enumerates the live star/dark/arcane catalog (#34). Branch
+`feat/canonical-potion-verbs`.
 
 ## Constraints & gotchas the chief must respect
 
-- See [`lessons.md`](lessons.md) (mirror of the project's LESSONS.md).
-- _TODO: anything orchestration-specific (build host, device, do-not-touch areas)._
+- See [`lessons.md`](lessons.md) — e.g. `0x10010009` after a client update means
+  world-select moved to `WorldSelectPopup`.
+- Consumes **GAP** — coordinate host changes upstream (global §7), don't fork them here.

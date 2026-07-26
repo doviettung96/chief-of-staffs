@@ -3,14 +3,13 @@
 
 - Synced: 2026-07-26
 - Source: `C:\Users\Tung\Projects\game-automation-platform`
-- Current branch: `feat/upstream-device-gate`
+- Current branch: `feat/fleet-party-abstraction`
 
 ## Working tree
-```
-M host/src/gap_host/orchestrator/controller.py
-```
+_Clean._
 
 ## Recent commits
+- `11cde89` feat(orchestrator): fleet-level party formation + mimic (PartySupervisor)  _(2026-07-26)_
 - `7572276` feat(orchestrator): add DeviceGate — generic exclusive-access device coordination  _(2026-07-26)_
 - `d058c6e` feat(host): surface + recover from login-blocking errors instead of hanging (#16)  _(2026-07-25)_
 - `b887d83` docs(lessons): 32-bit ABI via native bridge crash-loops IL2CPP games (#17)  _(2026-07-25)_
@@ -18,17 +17,16 @@ M host/src/gap_host/orchestrator/controller.py
 - `748bd75` Merge pull request #14 from doviettung96/feat/thienanh-host-cutover  _(2026-07-25)_
 - `47bf3da` Merge pull request #13 from doviettung96/docs/per-device-formation  _(2026-07-24)_
 - `fcf4a61` docs: per-device party formation reconcile + stale-party lesson  _(2026-07-24)_
-- `34ee5c6` Merge pull request #12 from doviettung96/docs/adb-bundle-emulator-lesson  _(2026-07-24)_
 
 ## Worktrees
 ```
-C:/Users/Tung/Projects/game-automation-platform                                                                                                    7572276 [feat/upstream-device-gate]
+C:/Users/Tung/Projects/game-automation-platform                                                                                                    11cde89 [feat/fleet-party-abstraction]
 C:/Users/Tung/AppData/Local/Temp/claude/C--Users-Tung-Projects-game-automation-platform/d9e70cde-a707-4269-9de3-d8df006f354f/scratchpad/gaphost-wt c412c96 [feat/geofarm-data-driven-entry]
 ```
 
 ## Open PRs
+- #20 feat(orchestrator): fleet-level party formation + mimic (PartySupervisor) `feat/fleet-party-abstraction` — mergeable=MERGEABLE
 - #19 feat(orchestrator): add DeviceGate — generic exclusive device coordination `feat/upstream-device-gate` — mergeable=MERGEABLE
 
 ## Live herdr agents
-- `w4:p6` **idle** — Apply GAP to downstream project
-- `w4:pC` **working** — Continue refactor applying GAP pattern
+_No herdr agents currently on this project._
