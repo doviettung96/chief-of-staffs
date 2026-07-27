@@ -18,10 +18,21 @@ repo owning only game-specific reversing and the hunt/economy policy.
 
 ## Current focus
 
-Consuming gap-host **DeviceGate** and evacuating `app/maintenance.py` upstream (PR #38);
-native login-error dialog detection + `session.dismiss_error` (#37); death-state detection
-in `/state` (#35); loot star-filter + native sell-by-star wired into team hunts (#31/#33).
-Branch `feat/upstream-device-gate`.
+The GAP-migration wave has landed on `main` (working tree clean, no open PRs as of
+2026-07-27): DeviceGate consumed + `app/maintenance.py` evacuated (#40); the big GAP
+migration — HuntBehavior, Deployer, pure-GAP supply, controller→toolkit (#46);
+native login-error dialog detection + `session.dismiss_error` (#37).
+
+**Shipped 2026-07-27: auto-consume during autofight/team-hunts** (GAP #26 + thienanh #47,
+both merged). GAP now carries `buffs` on the `Character` contract + a genre-blind,
+config-gated `ConsumeMixin` (OFF by default, `item.use`-only, one decision/tick after
+death-recovery): threshold HP/MP potions (defaults 50%/30%) + food-buff *maintenance*
+(re-eat when the regen buff is absent). thienanh consumes it via a native buff reader
+(`RoleData.BufferDataList`) + `SpriteUseGoods` + level-aware auto-selection wired into the
+team-hunt path (ON by default). Item eligibility is **grade-based** (consumables carry a
+*grade*; a char can use up to a grade→required-level map — verified live: lv50 uses grade-3
+food 130/hp 102/mp 113, excluded from grade-4). Live-proven on device 5557. Deferred: a
+grade-4 food whose regen buff id differs from 100020 (fleet is grade-3 today).
 
 ## Constraints & gotchas the chief must respect
 
