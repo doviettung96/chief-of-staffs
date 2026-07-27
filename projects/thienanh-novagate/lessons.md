@@ -1,6 +1,6 @@
 <!-- MIRROR of C:\Users\Tung\Projects\thienanh-novagate\LESSONS.md
      Source of truth is that file, in the project's own repo.
-     Overwritten by scripts/sync-project.py — do not edit here. Synced 2026-07-26. -->
+     Overwritten by scripts/sync-project.py — do not edit here. Synced 2026-07-27. -->
 
 # Lessons Learned
 
@@ -20,6 +20,36 @@ Format:
 ---
 
 <!-- Add lessons below this line -->
+
+### A new GAP verb needs an HTTP route registered, not just a HandleCommand branch
+- Date: 2026-07-27
+- Symptom: added `item.use` to `GapAdapter::HandleCommand` AND to `BuildCapabilities` (so `/capabilities` listed it), rebuilt + injected, but `POST /item/use` returned plain HTTP 404 "Not Found" — the verb never reached HandleCommand.
+- Root cause: `native-lib.cpp` registers each command path explicitly with httplib via `postGapCommand("/item.use", "item.use")` (and its slashed alias). Only registered paths exist on the server; an unregistered path 404s at the HTTP layer before HandleCommand runs. Capabilities listing a verb does NOT create its route.
+- Rule: a new adapter verb needs THREE edits in the native bridge — (1) the `if (v == "...")` branch in `GapAdapter::HandleCommand`, (2) the `commands`/`ext` list in `BuildCapabilities`, and (3) a `postGapCommand(...)` route registration in `native-lib.cpp`. Miss (3) and it 404s despite (2). Confirm with a live `POST`, not just `/capabilities`.
+- Tags: #gap #adapter #native #httplib #routing #verification
+
+### A memfd-injected bridge isn't in /proc/maps by name → deployer re-injects and crashes Unity
+- Date: 2026-07-27
+- Symptom: redeploying a rebuilt bridge, the deployer injected repeatedly over the SAME pid (`bridge ping timed out after injection` → inject again, 4+ times); the game process ended up wedged (pid alive, HTTP dead). Earlier redeploys "worked" only because the first post-inject ping happened to succeed before the next reconcile.
+- Root cause: the injector runs with `-dl_memfd` (loads the .so from an anonymous memfd), so it does NOT appear in `/proc/<pid>/maps` under `libmodtemplate.so`. `_reconcile`'s `process_maps_contains(pid, BRIDGE_NAME)` guard therefore returns False every reconcile, so any tick where the first ping hadn't yet succeeded triggered ANOTHER hot injection — and multiple dispatcher copies over one process SIGSEGV Unity (see the older hot-inject lesson).
+- Rule: to load a rebuilt bridge deterministically, do ONE controlled inject and wait generously for `/ping` before anything can reconcile again (a single force-stop → launch → inject → long `_wait_for_bridge`, then drive login with a NullDeployer controller so nothing re-injects). Don't rely on `process_maps_contains` to detect a memfd-loaded bridge. For scripted bring-up, bypass the reconcile loop entirely and inject once.
+- Tags: #android #injector #memfd #deploy #dispatcher #crash #gap
+
+### A git worktree needs the gitignored .toolchain/ and cpp extern/ junctioned in to build
+- Date: 2026-07-27
+- Symptom: `scripts/build-native-lib.ps1` in a fresh worktree failed first with "Missing JDK at .../.toolchain/jdk-17" (setup script absent), then CMake configure exit 1 (extern deps missing).
+- Root cause: `.toolchain/` and `native-lib/app/src/main/cpp/extern/` (BNM-Android, Dobby, KittyMemory, OpenSSL) are gitignored / restored out-of-band, so a linked worktree created off `main` has neither. Passing an absolute `-ToolchainRoot` also mis-joins (the script treats it relative to repo root).
+- Rule: for native builds in a worktree, create directory junctions to the primary checkout: `New-Item -ItemType Junction .toolchain -Target <primary>\.toolchain` and the same for `native-lib\app\src\main\cpp\extern`, then build with the default `-ToolchainRoot .toolchain -SkipSetup -AndroidSdkRoot C:\Users\Tung\AppData\Local\Android\Sdk`. Both junction targets are gitignored so they never show in `git status`.
+- Tags: #build #worktree #gradle #cmake #ndk #windows
+
+### Consumables gate by GRADE not ReqProp; buff duration is ms; food buff id is server-assigned
+- Date: 2026-07-27
+- Symptom: (a) a food buff's `remaining_ms` read ~1.8e9 (~500 h); (b) auto-consume re-ate food every tick — the maintained buff never appeared; the auto-picked food/medicine was a higher grade the character couldn't use, so the server silently rejected the use.
+- Root cause: three separate facts. (1) `BufferData` field @0x20 (dumped `BufferSecs`) is MILLISECONDS on the same clock as `StartTime`/`KTGlobal.GetCurrentTimeMilis` (a fresh food buff ≈ 1,799,901 ⇒ 30 min); a stray `*1000` gave 500 h. (2) Consumables do NOT list a level in `ItemData.ListReqProp` (that's equipment-only: `KE_ITEM_REQUIREMENT.emEQUIP_REQ_LEVEL=5`) — `req_level` reads 0. Their required level is encoded by the GRADE `ItemData.Level` (byte@0x46): grade 3 ⇒ lv50, grade 4 ⇒ lv70 (goods 130/131, confirmed live — a lv50 char consumes the grade-3 food + gets buff 100020, but the grade-4 food is NOT consumed and grants nothing). (3) The numeric buff id a food grants (100020) is assigned by the SERVER on use — not in client `ItemData` (EffectID=0; `MedicineProp` is name+value).
+- Rule: compute buff remaining as `StartTime + durationField - now` with NO `*1000`. Select a consumable by grade: derive required level from `ItemData.Level` (≈ `20*grade - 10`) and only pick items whose required level ≤ the character's level — never rank purely by stack count, or you pick an unusable higher grade and the use no-ops. Configure the food's maintained buff id (server-assigned, can't be read per food); food auto-selects the strongest usable grade. Verify usability the direct way: `item.use` a grade and check the bag count drops + the buff appears.
+- Tags: #il2cpp #reversing #buff #consume #grade #level #thienanh
+
+
 
 ### A rooted emulator is not a root adb shell — elevate before injecting
 - Date: 2026-07-22
@@ -126,4 +156,25 @@ Format:
 - Root cause: `run_injector` had no execution deadline; only the post-inject ping (`POST_INJECT_TIMEOUT`) had a timeout. A wedged injector (traced/frozen target, root-elevation stall) blocked the whole reconcile with no bound.
 - Rule: pass an explicit `INJECTOR_TIMEOUT` to `run_injector` so a wedged injector is killed and reported instead of hanging; keep the `time.monotonic()` deadline wait loops (`_wait_for_bridge`/`_wait_for_ping`) for readiness. This layers on top of the existing `_ensure_untraced_target` preflight so both the hang and the leftover-tracer failure modes are bounded.
 - Tags: #android #injector #timeout #deploy #runtime #gap
+
+### GAP native command payloads must nest data under `result` to survive the host
+- Date: 2026-07-27
+- Symptom: a new adapter verb returns rich fields (e.g. `ext.map_objects` -> `{ok, objects:[...], count}`) and the raw HTTP response over the wire is correct, but a Behavior reading `cmd.post("ext.map_objects").result` gets `None` — the discovery data vanished.
+- Root cause: `TransportClient.post` does `CommandResult.model_validate(response)`, and gap_host's `CommandResult` has no `extra=allow` — it keeps only `ok/detail/result/busy`. Any flat extra field on the adapter payload is dropped at the contract boundary. The old `app/hunt.py` path only preserved them because it used a raw-dict `GapClient`, not `CommandResult`.
+- Rule: any Adapter.cpp verb whose output a Behavior consumes must nest that output under `result` (`{"ok":true,"result":{...}}`); flat top-level fields beyond ok/detail/busy are silently discarded once the verb is driven through `CommandSink`.
+- Tags: #gap #contract #adapter #transport #commandresult
+
+### A rebuilt bridge .so is NOT re-injected while the old one is still reachable
+- Date: 2026-07-27
+- Symptom: rebuild `libmodtemplate.so` with new verbs, restart the host, but the live `/capabilities` still lacks the new verbs — the running game keeps answering with the old bridge.
+- Root cause: `BridgeLifecycle._maybe_reconcile` returns early if `_bridge_reachable` (old bridge still pings), and `_reconcile_device` returns early if `process_maps_contains(pid, libmodtemplate.so)` (the .so is already mapped). Neither path re-injects a fresh build into a live process.
+- Rule: to load a rebuilt bridge, force-stop the game first (`adb -s <dev> shell am force-stop com.novagate.thienanh`) so the pid/bridge disappear; the lifecycle then relaunches and injects the new .so. Confirm with live `/capabilities`, not just that the file on disk changed.
+- Tags: #android #injector #deploy #native #verification
+
+### Native build: local.properties SDK path is machine-specific and goes stale
+- Date: 2026-07-27
+- Symptom: `scripts/build-native-lib.ps1 -SkipSetup` fails with "Missing Android SDK at ...\.toolchain\android\sdk"; `native-lib/local.properties` points at `C:/Users/Admin/AppData/Local/Android/Sdk` (a different user).
+- Root cause: `local.properties` is a committed/leftover file with another machine's `sdk.dir`, and no `.toolchain/android/sdk` exists on this box. The real SDK (ndk 29.0.14206865 + cmake 3.22.1 + android-35, matching `app/build.gradle`) lives at `C:/Users/Tung/AppData/Local/Android/Sdk`.
+- Rule: build with `-AndroidSdkRoot "C:\Users\Tung\AppData\Local\Android\Sdk"` (the script rewrites + restores local.properties around the build). Don't trust the checked-in `local.properties` sdk.dir on a fresh machine.
+- Tags: #android #build #gradle #sdk #windows
 

@@ -34,15 +34,32 @@ command.
 
 1. **Spawn staff only via `herdr`**, each in its own git worktree + branch — never via
    the chief's own sub-agent/Task tool. Sub-agents are summoned by *staff*, not the chief.
-2. **Watch closely.** Poll `herdr agent list`; a `blocked` staff is burning time — handle
-   it before doing anything else.
-3. **Decide on evidence; escalate the rest.** Answer reversible blockers from the pane +
-   the project record. Escalate irreversible or owner-only calls via
-   `herdr notification show ... --sound request`.
+2. **Watch closely — you are the owner's single point of contact.** The owner talks to
+   the chief; the chief talks to staff. If the owner ever has to message a staff pane
+   directly, the chief has failed to watch. After spawning or nudging any staff, **stay on
+   it** — actively `herdr agent wait <target> --status blocked|idle` (don't fire-and-forget
+   and drift to other work), poll `herdr agent list`, and surface every staff
+   question/checkpoint to the owner *yourself, promptly*, then relay the answer back to the
+   staff. A `blocked` staff is burning time — handle it before anything else. Being late
+   here is the one failure the owner notices most.
+3. **Decide on evidence; escalate the rest — never leave a staff stalled.** Answer
+   reversible blockers from the pane + the project record. A staff that has gone
+   `idle`/`done` mid-task and is waiting on input is stalled just like a `blocked` one:
+   don't let it sit. If the next step is on-mission and reversible, send it yourself
+   (write the text, **then** press Enter — `agent send` does not submit). Only genuinely
+   irreversible or owner-only calls go to the owner via
+   `herdr notification show ... --sound request` (or an `AskUserQuestion`); relay the
+   answer back to the staff promptly.
 4. **Integrate conflict-free.** One merge at a time; decide order; rebase in-flight
    branches; build and live-verify from the *merged* result, not a single worktree.
 5. **Keep the record current.** Refresh a project before acting:
    `python scripts/sync-project.py <name>`.
+6. **Tear down when truly done.** Once a staff's task is merged (or abandoned), close its
+   pane (`herdr pane close <pane_id>`) and remove its worktree
+   (`herdr worktree remove --workspace <id>` / `git worktree remove`, then
+   `git worktree prune`) — don't leave finished staff or stale worktrees running. Keep a
+   staff alive only while it still has assigned work (e.g. approved follow-ups); when in
+   doubt whether it's fully done, verify the PR merged + deliverable built before closing.
 
 ## Working in this repo
 

@@ -1,6 +1,6 @@
 <!-- MIRROR of C:\Users\Tung\Projects\game-automation-platform\LESSONS.md
      Source of truth is that file, in the project's own repo.
-     Overwritten by scripts/sync-project.py — do not edit here. Synced 2026-07-26. -->
+     Overwritten by scripts/sync-project.py — do not edit here. Synced 2026-07-27. -->
 
 # GAP Lessons
 
