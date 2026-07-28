@@ -24,6 +24,11 @@ at the bottom — do not trust this list blind; it is a snapshot.
 - **Launch:** `codex` (codex-cli, `0.145.0` at last check), routed through a local
   proxy (**CLIProxyAPI** on `http://127.0.0.1:8317`). Default model `gpt-5.6-sol`,
   reasoning effort `high`, plan-mode `xhigh` (`~/.codex/config.toml`).
+  - **Spawning staff on Windows:** launch via **`codex.cmd`**, not bare `codex` —
+    `herdr agent start <name> --cwd <path> -- codex.cmd`. herdr's raw
+    `CreateProcessW` can't run npm's extensionless `codex` shim (os error 193) and
+    the lane silently falls back to Claude. `codex ...` from Git Bash (e.g.
+    `codex exec` for a quick check) is unaffected. See [`herdr.md`](herdr.md) / LESSONS.md.
 - **GPT-5.6 variants** served by the proxy:
   - `gpt-5.6-sol` — codex's current default. The general-purpose 5.6.
   - `gpt-5.6-luna` — alternate 5.6 variant.

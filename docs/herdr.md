@@ -44,7 +44,13 @@ herdr worktree remove --workspace <id> [--force]   # tear down when the task is 
 ```bash
 # Start an agent process in a given cwd (the worktree path), optionally in a specific workspace/tab:
 herdr agent start <name> --cwd <worktree-path> --workspace <id> -- claude
-herdr agent start <name> --cwd <worktree-path> -- codex          # GPT-5.6 lane
+herdr agent start <name> --cwd <worktree-path> -- codex.cmd      # GPT-5.6 lane
+# NOTE (Windows): launch the codex lane as `codex.cmd`, NOT bare `codex`. herdr
+# does a raw CreateProcessW; bare `codex` resolves to npm's extensionless Unix
+# shell shim, which Windows can't execute -> `agent_start_failed ... %1 is not a
+# valid Win32 application (os error 193)`, and the lane silently falls back to
+# Claude. `codex.cmd` is the npm-generated Windows launcher (recreated on every
+# codex update), so it stays valid across upgrades. See LESSONS.md.
 # `start` launches the agent; give it its task once it's up (see "Hand a task", below).
 ```
 
