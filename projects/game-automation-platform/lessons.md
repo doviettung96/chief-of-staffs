@@ -6,6 +6,13 @@
 
 Gotchas and reusable design rules for GAP-powered projects.
 
+### Party identity must prefer team_id over leader_id
+- Date: 2026-07-29
+- Symptom: a six-device hunt party kept quitting and rejoining every formation cooldown. Live state showed the desired leader recreating `teamId=402` while clients remained in older teams such as `400`, even though both parties reported the same `leaderId=405617`.
+- Root cause: formation treated `leader_id` as the party identity before the adapter's explicit `teamId`. A leader ID identifies the leader, not a particular party incarnation, so an old party and a newly recreated party could be falsely considered identical. The same reconciliation path also acted on stale snapshots after leave/create/apply/accept, and `ACCEPT_RETRIES=5` effectively performed one attempt because the loop broke unconditionally.
+- Rule: compare explicit `team_id`/`teamId` first and use `leader_id` only as a fallback for adapters without a party ID. After every state-changing party command, re-read authoritative per-device state and retry boundedly until membership is confirmed. Once every desired member reports the same explicit party, later ticks must issue no formation commands.
+- Tags: #party #formation #state #reconciliation #gap
+
 ### Multi-emulator adb version war → run your own adb server on a private port (isolation beats version-matching)
 - Date: 2026-07-29
 - Symptom: on a box running several emulator brands at once (MuMuPlayer + LDPlayer9 + xiaowei), every device stuck in lifecycle "deploying", `adb forward --list` empty, adapters unreachable; logs showed `adb server is out of date. killing...`. 0/15 came online and some timed out; restarting cycled the same failure. The dashboard even showed a stale `in_world` state (cached last-good read) while `online=false` — masking that the forward was dead.

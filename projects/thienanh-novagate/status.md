@@ -9,18 +9,18 @@
 _Clean._
 
 ## Recent commits
+- `5f9a64b` Merge pull request #55 from doviettung96/docs/lesson-restart-device-selection  _(2026-07-29)_
+- `2576aef` docs(lessons): restore device selection after restart  _(2026-07-29)_
 - `d81541d` feat(adb): default to a private adb server on 5137, not shared 5037 (#54)  _(2026-07-29)_
 - `adb1e62` docs(lessons): SSH launcher relaunch needs an interactive-token scheduled task (#53)  _(2026-07-28)_
 - `2a44ada` feat(revive): char.revive actuator (UIReviveFrame buttons) + dismiss_error route (#52)  _(2026-07-28)_
 - `8e603f8` docs(lessons): char.revive no-op on thienanh + restock trigger_at>=to zero-buy re-tour (#51)  _(2026-07-27)_
 - `96f3756` feat(restock): reuse shared GAP restock policy; expose SupplyTour as shop.buy_from_npc (#50)  _(2026-07-27)_
 - `2a91179` feat(consume): install per-device Consumer via set_consume (leader + mimics) (#49)  _(2026-07-27)_
-- `e5832eb` feat(consume): emit grade-desc candidate lists, drop guessed grade→level table (#48)  _(2026-07-27)_
-- `55c12bd` feat(consume): auto-consume during autofight (potions + food buff) (#47)  _(2026-07-27)_
 
 ## Worktrees
 ```
-C:/Users/Tung/Projects/thienanh-novagate d81541d [main]
+C:/Users/Tung/Projects/thienanh-novagate 5f9a64b [main]
 ```
 
 ## Open PRs
