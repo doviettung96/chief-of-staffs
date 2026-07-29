@@ -1,10 +1,24 @@
 <!-- MIRROR of C:\Users\Tung\Projects\game-automation-platform\LESSONS.md
      Source of truth is that file, in the project's own repo.
-     Overwritten by scripts/sync-project.py — do not edit here. Synced 2026-07-27. -->
+     Overwritten by scripts/sync-project.py — do not edit here. Synced 2026-07-29. -->
 
 # GAP Lessons
 
 Gotchas and reusable design rules for GAP-powered projects.
+
+### Multi-emulator adb version war → run your own adb server on a private port (isolation beats version-matching)
+- Date: 2026-07-29
+- Symptom: on a box running several emulator brands at once (MuMuPlayer + LDPlayer9 + xiaowei), every device stuck in lifecycle "deploying", `adb forward --list` empty, adapters unreachable; logs showed `adb server is out of date. killing...`. 0/15 came online and some timed out; restarting cycled the same failure. The dashboard even showed a stale `in_world` state (cached last-good read) while `online=false` — masking that the forward was dead.
+- Root cause: there is exactly one adb server per host port (default 5037). Each emulator brand ships and auto-launches its OWN adb of a different version (LD 1.0.31, MuMu 1.0.41, xiaowei 34.x); whenever a different-version client touches 5037 it declares the running server "out of date", kills+restarts it, and every restart WIPES all `adb forward` rules + device registrations. With ONE brand you can match versions (see "Bundle the emulator's adb" below); with MULTIPLE brands there is no single version to match — the brands' background services keep re-grabbing 5037 and you cannot win the shared port.
+- Rule: don't fight for the shared port — give the automation its OWN adb server on a dedicated port (`ANDROID_ADB_SERVER_PORT` / `-P <port>`, e.g. 5137) that nothing else touches, and reach each instance over TCP (`adb connect 127.0.0.1:<port>` — the private server starts EMPTY so you must connect, or rely on the console-port scan for `emulator-NNNN`). The daemon (adbd) inside each emulator accepts multiple simultaneous TCP transports, so your private server coexists with the brands' own on 5037 without touching it. NEVER set `ANDROID_ADB_SERVER_PORT` machine/user-wide — that drags the emulators' own adb onto your port and just recreates the war there; scope it to your process only (`-P` on the argv AND the env passed to the adb subprocess, so any injector child inherits it too). One modern platform-tools adb (1.0.41) drives ALL brands' daemons over TCP, so bundle one known-good adb and pin every adb call — deployer AND injector — to it + the private port; `start-server` is idempotent, NEVER `kill-server` (a private server may back several automations — give each automation a DISTINCT port unless they share one adb binary/version). In gap-host this is opt-in `AndroidDeployConfig.adb_server_port` (#34, `deploy/android.py` + `deploy/android_inject.py` + `config.py`); a game with its own controller (e.g. thienanh) sets it in-process instead. This SUPERSEDES the single-brand "bundle the matching adb" fix below whenever a host runs more than one emulator brand.
+- Tags: #adb #emulator #mumu #ldplayer #version-war #private-server #deploy #windows #gap
+
+### Never exec a device-side injector on the host (WinError 193)
+- Date: 2026-07-27
+- Symptom: gap-host's `AndroidDeployer` inject failed on Windows with `[WinError 193] %1 is not a valid Win32 application`; the fleet couldn't deploy namlun's adapter to any device.
+- Root cause: the deployer's default injector ran the configured injector binary **on the host** (`subprocess.run([injector, serial, so])`). AndKittyInjector is an Android/Linux ELF — it must run **on the device**. Executing it on the host is wrong on every OS; Windows just surfaces it loudly (CreateProcess can't run an ELF, nor a `.sh` without an interpreter). Shelling out to `tools/inject.sh` via bash-on-Windows would "work" but re-introduces a repo-relative script + a bash dependency in the bundle.
+- Rule: an Android injector is **on-device target plumbing** — `adb push` the injector ELF + the `.so` to `/data/local/tmp` and run it via `adb shell`; never `subprocess` it on the host, and don't shell out to a `.sh` either. Port the proven inject logic into the host bundle itself (gap-host `OnDeviceInjector`). Keep the mechanism general (root → push → launch/wait-for-readiness → `adb shell <injector> <argv template>` → confirm via loader-marker log) and keep the game-specifics as **config data** below the boundary (ELF path, argv template e.g. `-pkg {pkg} -pid {pid} -lib {so} -dl_memfd`, il2cpp-readiness + loader-marker regexes, root). Login stays with gap-host's session verbs, not the injector. See `host/src/gap_host/deploy/android_inject.py`, the `deploy.inject` config block, and the `ensure_adb_root` lesson below (the injector still needs a root adbd once it's on-device).
+- Tags: #android #injector #adb #windows #winerror193 #deploy #gap #on-device
 
 ### A restarted host leaves the leader owning a stale party
 - Date: 2026-07-24
