@@ -17,6 +17,29 @@ Format:
 
 <!-- Add lessons below this line -->
 
+### codex shares a code-mode-host daemon — never force-kill codex process trees on a shared box
+- Date: 2026-07-29
+- Symptom: after a codex staff finished, `herdr pane close` left orphaned codex process
+  trees (`codex.cmd`→`cmd`→`node`→`codex.exe`→`codex-code-mode-host.exe`) alive, holding the
+  worktree dir busy (`rm: Device or resource busy`, `worktree_remove_failed: Permission denied`).
+  I force-killed MY orphans by PID with `taskkill /PID <mine> /T /F`. Immediately after, the
+  fleet's codex count dropped to 0 and ZERO codex processes survived — a peer chief's two live
+  codex agents (`party-convergence`, `w4:p12`) were killed as collateral.
+- Root cause: codex on this box runs a SHARED `codex-code-mode-host.exe` daemon (and interlinked
+  node trees) across all codex agents. `taskkill /T` (kill process tree) cascaded through that
+  shared daemon, so killing one agent's tree took down every codex agent on the box. Also:
+  `herdr pane close` does NOT terminate the codex process tree — it detaches the pane and leaves
+  the processes orphaned.
+- Rule: NEVER `taskkill /T` (or otherwise force-kill) codex process trees on a shared box —
+  it's as broad as an IMAGENAME kill (see the by-PID lesson below). Tear codex down via herdr's
+  own teardown path only. If pane-close leaves orphaned codex processes holding a worktree busy,
+  LEAVE the worktree dir (git already untracks it after `worktree prune`; it's harmless disk
+  clutter) and prune later once handles release — do NOT escalate to force-kill. If a codex proc
+  genuinely must die, kill only the exact leaf PID without `/T`, never the tree, and never the
+  shared `code-mode-host`. When it happens anyway, alert the peer chief immediately so it can
+  respawn (as I did — the peer recovered).
+- Tags: #codex #herdr #shared-box #collateral #taskkill #teardown #fleet #worktree
+
 ### Spawn the codex lane via `codex.cmd`, not bare `codex` — herdr CreateProcessW fails on the npm shim
 - Date: 2026-07-28
 - Symptom: `herdr agent start <name> --cwd <path> -- codex` →
