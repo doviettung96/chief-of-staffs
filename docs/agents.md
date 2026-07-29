@@ -18,29 +18,32 @@ at the bottom — do not trust this list blind; it is a snapshot.
   available — but the chief never spawns Claude staff on its own. It requires explicit owner
   confirmation, even when codex cannot run (see "Picking a lane per task"). Ask first.
 
-## Lane B — codex (the "GPT-5.6" lane)
+## Lane B — codex (the "GPT-5.5" lane)
 
 - **Launch:** `codex` (codex-cli, `0.145.0` at last check), routed through a local
-  proxy (**CLIProxyAPI** on `http://127.0.0.1:8317`). Default model `gpt-5.6-sol`,
+  proxy (**CLIProxyAPI** on `http://127.0.0.1:8317`). Default staff model `gpt-5.5`,
   reasoning effort `high`, plan-mode `xhigh` (`~/.codex/config.toml`).
   - **Spawning staff on Windows:** launch via **`codex.cmd`**, not bare `codex` —
     `herdr agent start <name> --cwd <path> -- codex.cmd`. herdr's raw
     `CreateProcessW` can't run npm's extensionless `codex` shim (os error 193) and
     the lane silently falls back to Claude. `codex ...` from Git Bash (e.g.
     `codex exec` for a quick check) is unaffected. See [`herdr.md`](herdr.md) / LESSONS.md.
-- **GPT-5.6 variants** served by the proxy:
-  - `gpt-5.6-sol` — codex's current default. The general-purpose 5.6.
+- **Default staff model:** `gpt-5.5`. Use this for staff unless the owner explicitly
+  requests a different model. The GPT-5.6 variants are currently high-load and often
+  report capacity errors, which can halt staff execution mid-task.
+- **High-load / explicit-only GPT-5.6 variants** served by the proxy:
+  - `gpt-5.6-sol` — general-purpose 5.6 variant.
   - `gpt-5.6-luna` — alternate 5.6 variant.
   - `gpt-5.6-terra` — alternate 5.6 variant.
   - _Characterize luna/terra empirically before leaning on a distinction — treat them
     as peers of sol until proven otherwise; don't invent a hierarchy._
-- **Older / fallback models on the proxy:** `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`,
+- **Other models on the proxy:** `gpt-5.4`, `gpt-5.4-mini`,
   `gpt-5.3-codex-spark`, plus `codex-auto-review` and image models
   (`gpt-image-1.5`, `gpt-image-2`).
 - **Strengths:** equally capable across task shapes; fast iteration inside the codex
   sandbox and cheap to fan out for high-volume parallel work.
-- **Role for staff — the default lane.** Assign every staff task here (`sol` unless a
-  task specifically calls for `luna`/`terra`). Metered through CLIProxyAPI, so it can be
+- **Role for staff — the default lane.** Assign every staff task here on `gpt-5.5`
+  unless the owner explicitly requests another model. Metered through CLIProxyAPI, so it can be
   unavailable — when it is, ask the owner before using Claude (never auto-fall-back).
 
 ## Picking a lane per task
@@ -49,14 +52,14 @@ at the bottom — do not trust this list blind; it is a snapshot.
 permission — it is NOT an automatic fallback.** Both lanes are equally capable; codex is
 the standing choice regardless of task shape, difficulty, or prod-sensitivity.
 
-- **Default lane — codex.** Assign every staff task to codex (`sol` unless a task
-  specifically calls for `luna`/`terra`). This is the standing rule for all work shapes:
+- **Default lane — codex.** Assign every staff task to codex on `gpt-5.5` unless the
+  owner explicitly requests another model. This is the standing rule for all work shapes:
   design, refactor, debugging, mechanical fan-out, drafts — and for hard or prod-touching
   work too. Do **not** switch to Claude for "safety", "caution", or "checkpoint discipline"
   reasons; instead constrain codex through a tight brief and watch it closely.
 - **Claude staff — ask the owner first, every time.** Never `herdr agent start ... --
   claude` on your own initiative. Even when codex genuinely cannot run (CLIProxyAPI down,
-  api-key expired/rate-limited, model at capacity, or a codex staff erroring mid-task that
+  api-key expired/rate-limited, `gpt-5.5` at capacity, or a codex staff erroring mid-task that
   can't recover), you **stop and ask**: state the specific codex failure and request
   permission — "codex is <failure> — OK to run this on Claude instead?" — then wait for a
   yes. No silent auto-fallback. (Owner's rule, set 2026-07-29, after the chief auto-summoned
@@ -68,7 +71,7 @@ The chief itself still runs on Opus (it is the Claude Code process the owner tal
 this policy is about which lane the chief spawns **staff** into.
 
 **State the lane before spawning.** Before every `herdr agent start`, say the lane and
-the one-line reason: e.g. "Lane: codex (sol)". If you believe Claude is warranted, do not
+the one-line reason: e.g. "Lane: codex (`gpt-5.5`)". If you believe Claude is warranted, do not
 spawn — ask the owner and wait.
 
 ## Reasoning effort

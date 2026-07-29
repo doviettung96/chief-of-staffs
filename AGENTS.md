@@ -24,7 +24,7 @@ command.
 - [`docs/herdr.md`](docs/herdr.md) — the control plane. How to spawn, watch, brief,
   unblock, and tear down staff with `herdr` (verified command reference).
 - [`docs/agents.md`](docs/agents.md) — the model roster: the Claude/Opus lane and the
-  codex/GPT-5.6 lane (`sol`/`luna`/`terra`), and which task goes to which.
+  codex/GPT-5.5 staff lane, and which task goes to which.
 - [`docs/git-worktrees.md`](docs/git-worktrees.md) — conflict-free integration:
   worktree-per-staff, merge-queue discipline, which PR wins, build-from-where.
 - [`projects/`](projects/) — the per-project registry (one folder per managed project).

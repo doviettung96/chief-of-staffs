@@ -44,7 +44,7 @@ herdr worktree remove --workspace <id> [--force]   # tear down when the task is 
 ```bash
 # Start an agent process in a given cwd (the worktree path), optionally in a specific workspace/tab:
 herdr agent start <name> --cwd <worktree-path> --workspace <id> -- claude
-herdr agent start <name> --cwd <worktree-path> -- codex.cmd      # GPT-5.6 lane
+herdr agent start <name> --cwd <worktree-path> -- codex.cmd      # GPT-5.5 lane
 # NOTE (Windows): launch the codex lane as `codex.cmd`, NOT bare `codex`. herdr
 # does a raw CreateProcessW; bare `codex` resolves to npm's extensionless Unix
 # shell shim, which Windows can't execute -> `agent_start_failed ... %1 is not a
@@ -90,12 +90,13 @@ _This sequence is verified — it is exactly the loop the chief ran end-to-end t
 #    `herdr worktree create` when you want it opened as a herdr workspace too)
 git -C C:/Users/Tung/Projects/<proj> worktree add "$WT" -b feat/<task> <integration-branch>
 
-# 2. Spawn (pick lane per docs/agents.md; --no-focus so it doesn't grab the owner's screen)
-herdr agent start <task> --cwd "$WT" --no-focus -- claude
+# 2. Spawn (pick lane per docs/agents.md; default staff lane is codex on gpt-5.5;
+#    --no-focus so it doesn't grab the owner's screen)
+herdr agent start <task> --cwd "$WT" --no-focus -- codex.cmd
 
-# 3. Boot: wait for idle, then clear the FIRST-RUN TRUST PROMPT.
+# 3. Boot: wait for idle, then clear any FIRST-RUN TRUST PROMPT.
 herdr agent wait <task> --status idle --timeout 120000
-herdr agent read <task> --lines 20          # a fresh claude asks "trust this folder?" — option 1
+herdr agent read <task> --lines 20          # a fresh agent may ask "trust this folder?" — option 1
 herdr pane send-keys <pane_id> Enter        # accept (it's your own worktree)
 
 # 4. Brief — send the text, THEN submit with Enter (agent send does NOT press Enter).
