@@ -21,6 +21,13 @@ Format:
 
 <!-- Add lessons below this line -->
 
+### Restore device selection after a packaged host restart before judging team health
+- Date: 2026-07-29
+- Symptom: after deploying and successfully launching a fresh `ThienAnhControl.exe`, the dashboard API was healthy but `/api/targets` and `/api/extensions/thienanh/devices` were empty, configured teams reported `follow: idle`, and no formation ran. The private MuMu ADB server still listed all expected emulators.
+- Root cause: operator device selection is deliberately session-scoped and is not persisted across host restarts. The new host therefore had no selected targets even though team configuration, emulator connectivity, bridges, and credentials were intact.
+- Rule: after restarting the packaged host, verify the private ADB server first, then restore the configured devices through `POST /api/extensions/thienanh/devices/selection` before diagnosing deployment, bridge, login, or party failures. Reattachment probes the existing bridges; do not assume an empty fleet requires native reinjection.
+- Tags: #thienanh #deployment #restart #devices #selection #adb #party
+
 ### A console/GUI launcher started over SSH lands in Windows session 0 and dies — relaunch it into the active console session via a one-shot interactive-token scheduled task
 - Date: 2026-07-28
 - Symptom: after scp'ing the rebuilt `ThienAnhControl.exe` bundle to a remote Windows host and swapping it into place, relaunching it with a plain `ssh host "Start-Process ThienAnhControl.exe"` showed 2 processes at +6s but then `Get-Process` returned `count=0` — the launcher started and immediately exited. (`scp` had also refused to overwrite the old exe with SFTP `dest open Failure` because the prior launcher was still running and holding a lock on the file.)

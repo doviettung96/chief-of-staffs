@@ -9,18 +9,18 @@
 _Clean._
 
 ## Recent commits
+- `41edb1e` Merge pull request #38 from doviettung96/docs/lesson-party-identity  _(2026-07-29)_
+- `c1b7245` docs(lessons): distinguish party identity from leader  _(2026-07-29)_
 - `a54cbc7` fix: converge delayed party formation (#37)  _(2026-07-29)_
 - `dbc25ec` docs(lessons): multi-emulator adb version war → private adb server port (#36)  _(2026-07-29)_
 - `844a60b` feat(deploy): host-owned private adb server — end the multi-emulator adb version war (#34)  _(2026-07-28)_
 - `addf1fd` fix(restock): normalize trigger_at < to to stop the zero-buy re-tour (#33)  _(2026-07-28)_
 - `90ad0f1` feat(geofarm): runtime mob-position routing for edgeless maps (#32)  _(2026-07-28)_
 - `f7e9a83` feat(restock): shared genre-blind restock policy + shop.buy_from_npc composed verb (#31)  _(2026-07-27)_
-- `b3e9a8d` refactor(consume): unify HP/MP/food into ONE cross-cutting Consumer; delete Maintenance (#30)  _(2026-07-27)_
-- `ab76b43` feat(deploy): native-Python OnDeviceInjector — fix host-side inject WinError 193 (#29)  _(2026-07-27)_
 
 ## Worktrees
 ```
-C:/Users/Tung/Projects/game-automation-platform a54cbc7 [main]
+C:/Users/Tung/Projects/game-automation-platform 41edb1e [main]
 ```
 
 ## Open PRs
