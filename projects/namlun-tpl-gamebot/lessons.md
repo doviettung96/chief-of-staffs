@@ -1,6 +1,6 @@
 <!-- MIRROR of C:\Users\Tung\Projects\namlun-tpl-gamebot\LESSONS.md
      Source of truth is that file, in the project's own repo.
-     Overwritten by scripts/sync-project.py — do not edit here. Synced 2026-07-27. -->
+     Overwritten by scripts/sync-project.py — do not edit here. Synced 2026-07-29. -->
 
 # Lessons Learned — namlun-tpl-gamebot
 
@@ -18,6 +18,143 @@ Entry format:
 ```
 
 ---
+
+### Shared box: auto-discovery must not auto-deploy — gate device registration on operator opt-in
+- Date: 2026-07-28
+- Symptom: the namlun dashboard's auto-discovery loop (adb devices + `pm path` game probe)
+  registered EVERY discovered device with the Fleet. On this shared box (4 live LDPlayer
+  instances, 2 with the game installed), that would force-stop a co-located device's game the
+  moment it was registered — clobbering another agent's running farm on an emulator this task
+  never should have touched.
+- Root cause: registering a Target attaches the gap-host `AndroidDeployer`, and the controller
+  loop calls `deployer.ensure_ready()` as soon as the adapter endpoint is unreachable —
+  regardless of credentials or autologin. `ensure_ready`→`deploy` **force-stops the package and
+  injects**. So merely *registering* a discovered device (not even logging in) is enough to
+  force-stop its game. Discovering + registering all installed devices therefore reaches into
+  every emulator on the box, not just the one the operator is onboarding.
+- Rule: separate DETECTION from REGISTRATION. Detect + display all devices, but register (→
+  deploy → force-stop → inject) ONLY devices the operator has explicitly opted into — here,
+  gated on saved credentials (`login` + `password` present). Never auto-deploy to a device the
+  operator hasn't onboarded. `NamlunExtension._sync_once` builds `want = {serial for detected
+  if _has_creds(serial)}` and registers/reconciles only that set; detected-but-uncredentialed
+  devices stay detect-only rows in the UI. Pairs with the existing "kill by PID, not imagename"
+  shared-box rule — both are about not disrupting co-located work.
+- Tags: #shared-box #gap-host #deployer #discovery #force-stop #dashboard #namlun_gap
+
+### build-dist.ps1 aborts on PyInstaller's stderr: PS 5.1 wraps native stderr into terminating errors
+- Date: 2026-07-28
+- Symptom: `scripts/build-dist.ps1` (the `dist/NamlunControl.exe` bundle build) threw and
+  exited non-zero the instant PyInstaller started, whenever its output was captured
+  (redirection, CI, or a tool harness). The `.so` built fine; the freeze never ran. Error:
+  `py.exe : 254 INFO: PyInstaller: 6.21.0, contrib hooks: 2026.6 ... + CategoryInfo :
+  NotSpecified: (254 INFO: PyIns...b hooks: 2026.6:String) [], RemoteException +
+  FullyQualifiedErrorId : NativeCommandError` — pointing at the `& $python -m PyInstaller …`
+  line. Ran fine interactively (console), failed only when stdout/stderr were captured.
+- Root cause: PyInstaller logs progress to **stderr** (INFO lines). Under Windows PowerShell
+  5.1, when a native exe's output is captured/redirected, each stderr line is wrapped into a
+  `NativeCommandError` ErrorRecord. With `$ErrorActionPreference = "Stop"` at the top of the
+  script, the FIRST such record is treated as terminating and aborts the script — even though
+  PyInstaller returned exit code 0 and produced the exe. So it's not a build failure; it's PS
+  5.1 mistaking informational stderr for a fatal error. (This is the same class of trap the
+  PowerShell tool docs warn about for `2>&1` on native exes.)
+- Rule: for a native exe whose stderr is *informational* (PyInstaller, many build tools),
+  don't call it bare under `$ErrorActionPreference = "Stop"` when output may be captured.
+  Route it through cmd so stderr is merged at the OS level and never becomes an ErrorRecord —
+  `& cmd /c "`"$python`" -m PyInstaller launcher.spec --clean --noconfirm 2>&1"` — then gate
+  success ONLY on `$LASTEXITCODE`, never on `$?` or the absence of stderr. Do NOT "fix" it by
+  parsing stderr or by blanket-suppressing errors. `scripts/build-dist.ps1`.
+- Tags: #build #windows #powershell #pyinstaller #bundle #stderr
+
+### Geofarm parks & starves on star-field 1649: `nearby[]` freezes on empty cell + colliders are all `m_TerrainKey=-1`
+- Date: 2026-07-27
+- Symptom: `GeoFarmBehavior` on Star Force Field 1649 (`Zenumistlab_05labunit102_S`) never
+  farms — char parks on its spawn cell, gap-host logs `stall — no progress for 143s`, 0 kills.
+  While parked, `/state` `nearby[]` is FROZEN (identical id-set / hash for minutes) and
+  `combat.in_combat=false`, MP flat — even though HP slowly bleeds (mobs hitting a wedged char)
+  and keep-alive keeps drinking. Moving the char does NOT unfreeze it; it un-freezes only once
+  the char lands on a cell that actually has mobs and the autofight engages.
+- Root cause: TWO stacked. (1) The `starfield_1649` map pack has **0 traversal edges**, so the
+  planner can't route off an empty cell. It has 0 edges because on this map `ext.terrain` returns
+  ALL 35 colliders with `m_TerrainKey = -1` (unkeyed) and every `ext.map` rope edge resolves
+  `to=-1`, so `map_capture._pair_edges` (keys platforms by collider key) builds nothing. Normal
+  maps (spore_hill/Henesys) capture fine — their colliders ARE keyed. So it's a **star-field
+  map-class capture gap**, not general. (2) The adapter's `nearby[]` scan only refreshes while
+  the char is in an active-combat field context; a char stranded on an empty/entrance cell reads
+  a stale cached snapshot → looks frozen. Not a hang: the client + `ext.runto` stay responsive.
+- Rule: "frozen `nearby[]` + `in_combat=false` + MP flat" = char stranded on an empty cell, NOT
+  a mod crash — the fix is to get it onto a populated cell, not to restart. Do NOT try to fix 1649
+  by re-running the geometry capture — colliders are key=-1, it will keep yielding 0 edges. Shipped
+  fix = gap-host runtime mob-position routing (`GeoFarmBehavior` edgeless fallback) steering via the
+  canonical `nav.move_to` (added to the .so as a thin `request_runto` wrapper), gated so keyed maps
+  keep the static graph. KEY traversal facts proven live (avoid the wrong rabbit holes):
+  (1) `nav.move_to`/`request_runto` DOES traverse vertically — it walks up ramps AND down between
+  platforms via the .so's walk-path; you do NOT need explicit rope/down-jump verbs for most hops.
+  (2) The strand cause was steering to the NEAREST mob, whose x can lie inside the char's own empty
+  platform → run-to-x never leaves it; steer to the FARTHEST mob (escape bias) + blacklist-and-rotate
+  if the cell doesn't change. (3) Keeping `combat.auto_combat` ON while moving lets the native
+  autofight lock an unreachable mob and freeze the move — disengage combat while routing.
+  (4a) COLD/AFTER-DEATH ENTRY STALL: `g_field_ticked` (in-world flag) is set by the field Updater
+  which keeps ticking at char-select too, so it stays stale-TRUE after any field exit that isn't a
+  clean `session.logout` (death→revive→relogin, or a cold login landing at char-select). Effect:
+  `/state` reports `in_world=true` at the lobby AND the login pump's `if (IsInWorld()) return true`
+  short-circuits BEFORE `CharacterSelect.StartGame()` → stuck at char-select (needs a manual
+  `session.logout` to recover). FIX (PR namlun #44): `g_lobby_scene_active` gate, set from the active
+  IScene being `NGameObject.NObject.Lobby` (char-select scene, sibling of Title) via `GetActiveLobby()`
+  every pump tick; `in_world()` returns false when the lobby scene is active. Verified cold (no logout):
+  ServerJoin → lobby_detected → start_game (native) → field tick, honest /state at every stage.
+  (4) LIFECYCLE: `combat.auto_combat` ON with keep-alive stopped = the char fights unhealed and DIES.
+  Combat and keep-alive MUST be coupled: gap-host `controller.stop()` now disengages combat on
+  teardown; never leave auto_combat on after stopping the host (a manual `/combat/auto_combat {on}`
+  in a probe will kill the char if consume isn't running). Autonomous 10-min proof: 0 stalls, 0
+  deaths, 6 cells / 21 heights, 70% time on the densest cell, EXP +2.28%.
+- Tags: #geofarm #gap-host #starfield #capture #terrain #il2cpp #nearby #traversal #lifecycle
+
+### Away-parked cold login hung at "touch to start": the reserve-away retry must survive g_login_initiated
+- Date: 2026-07-27
+- Symptom: cold `POST /session/login` for an AWAY-PARKED char hung at the title/"touch to
+  start" screen (`/state` stage=`title`, `in_world`=false), never reclaiming. Logcat:
+  `ServerJoin:IDLogin(String,String,String,String,Int32)` → ~60s later
+  `NTitle.OnFailure / 0x10010009` → `SN_Fail` → `Protocol State: Login -> Init`, then stuck.
+- Root cause: TWO things stacked. (1) The game's OWN spontaneous auto-login uses
+  `ServerJoin.IDLogin(...)` — a DIFFERENT method than the reserve-away `IDLoginNew(bool,bool)`
+  the mod hooks — so it logs in PLAIN (no reserve-away) and an away-parked char's world session
+  rejects it with `0x10010009`. (2) The recovery is a reserve-away `IDLoginNew` RETRY (→ QA_Away
+  away-reconnect), but PR #31 made the ServerJoin drive machine post StartLogin ONLY while
+  `!g_login_initiated` and switch to WorldSelect-only once a login had fired. So after the first
+  attempt latched `g_login_initiated=true`, the reserve-away login never re-fired — WorldSelect
+  no-ops on an unlogged session — and the char stranded at "touch to start" (this regressed the
+  2026-07-17 "away login needs a RETRY, not one shot" behavior, which PR #31 verified only on a
+  non-away account).
+- Rule: keep the reserve-away StartLogin retry alive on its ~18s cadence at ServerJoin
+  REGARDLESS of `g_login_initiated`, interleaved with (not replaced by) the ~6s WorldSelect for
+  the fresh/no-recent-server case. It's idempotent for the success path (you leave ServerJoin
+  within 18s once logged in). `ExecuteEnterWorld` (`lib/src/gap/session_namlun.hpp`). Verified
+  live 2026-07-27 on emulator-5554: reproduced the hang (plain `IDLogin` → `0x10010009` → stuck
+  at title), then `POST /session/login` → `(re)post_start_login reserve_away=1` →
+  `Protocol State: Login -> QA_Away.Away` → `Away.GameJoining -> Run` → `start_game (native)` →
+  in_world, ZERO taps. Possible future hardening: also hook the plain `ServerJoin.IDLogin` to
+  force reserve-away so the game's spontaneous auto-login never eats the `0x10010009` at all.
+- Tags: #il2cpp #login #namdaichien #0x10010009 #away-reconnect #reserve-away #session #regression
+
+### Headless inject-to-field: drive the mod's /session/enter_world, not adb screen taps
+- Date: 2026-07-27
+- Symptom: `tools/inject.sh` reached the field after a title-inject via two blind adb screen
+  taps (`input tap 480 382` = touch-to-start, `input tap 800 460` = the character-select
+  "start" button). Not headless, and fragile — the coordinates are resolution/account
+  specific and the "start" tap in particular silently missed on any board that wasn't the
+  exact layout it was written for.
+- Root cause: inject.sh predated the native login subsystem. The mod already drives the whole
+  chain in-mod (`lib/src/gap/session_namlun.hpp`): `IDLoginNew` → `WorldSelectPopup.OnWorldSelectItem`
+  → `CharacterSelect.StartGame` (logged as `start_game (native)`), publishing `in_world` on
+  `GET /state`. inject.sh just wasn't wired to use it, so the taps were the last non-headless step.
+- Rule: for headless entry, `adb forward tcp:<host> tcp:18080` → wait `GET /health` → POST
+  `/session/enter_world` (or `/session/login {account,password}` for a cold-token account; the
+  mod auto-fills the Roid web form) → poll `GET /state` for `"in_world":true`. Keep screen taps
+  only behind an explicit `ENTER_FIELD_VIA=tap` fallback. Verified live 2026-07-27 on
+  emulator-5554: cold title-inject → in_world, zero taps (PR #37). Injector discovery: the
+  worktree ships no injector binary — inject.sh now reads the fleet injector from
+  `gap_accounts.json` (`"injector"`), so a bare run finds it; else set `ANDKITTY_INJECTOR`.
+- Tags: #inject #headless #session #login #tooling #tap
 
 ### ext.star_fields: enumerate the flyweight table + filter by Count>0 — NOT sub-object presence or RecommendationLevel
 - Date: 2026-07-26
@@ -124,3 +261,24 @@ Entry format:
   the heavier fallback, not the primary path. The general half ("login is not one-shot — retry
   until in_world") is reflected up in the GAP `CONTRACT.md` `session.*` note.
 - Tags: #il2cpp #login #namdaichien #0x10010009 #away-reconnect #session
+
+### gap-host is an editable install — its config schema drifts; track it in make_gap_accounts.py
+- Date: 2026-07-27
+- Symptom: `gap-host run --accounts gap_accounts.json` drove deploy+login+farm fine, but the
+  keep-alive never fired — a farming char fell to <55% HP and never drank. No `consume`/drink
+  event ever appeared. The config had a populated `maintenance` block.
+- Root cause: `scripts/make_gap_accounts.py` emitted a top-level `maintenance` block
+  (`{enabled, hp:{item_id,pct}, mp:{...}, restock}`), but upstream gap-host **retired that
+  shape**. `gap_host.config.load_fleet_config` only reads a top-level **`consume`** block, and
+  `gap_host.engine.consume.ConsumeConfig.from_dict` expects a different schema — so the
+  `maintenance` block was silently ignored and the drinker stayed OFF (default). gap-host is an
+  *editable* pip install from the sibling `game-automation-platform` repo, so a `git pull` there
+  can change the host's config contract underneath this repo with no version bump.
+- Rule: `make_gap_accounts.py` must track the upstream host's config schema, not a frozen copy.
+  Keep-alive is a top-level `consume` block:
+  `{"hp_items":[<id>], "hp_pct":N, "mp_items":[<id>], "mp_pct":N, "cooldown_s":N, "restock":{"enabled":bool,"to":N,"at":N,"interval_s":N}}`
+  (verified live: applying it healed 48%->100% via `item.use 4980`; it round-trips through
+  `load_fleet_config` -> `ConsumeConfig.from_dict(active=True)`). When a host feature seems inert,
+  diff the emitted config keys against the current `gap_host` loader/`*Config.from_dict` — don't
+  assume the block is read just because it's present. Re-check after any gap-host `git pull`.
+- Tags: #gap-host #config #editable-install #consume #keep-alive #schema-drift
