@@ -12,6 +12,11 @@ Thumbs.db
 # Local, machine-specific agent scratch
 .workflow/
 
+# Security investigations — may contain unpatched vulnerability details about
+# live sites. This repo's remote is PUBLIC; never commit/push these here. Keep
+# investigation notes local-only (or in a private repo).
+investigations/
+
 # Generated skill symlinks (source of truth is .skills.config; regenerate with
 # sync-skills.py). The links hold absolute, machine-specific targets.
 .claude/skills/
