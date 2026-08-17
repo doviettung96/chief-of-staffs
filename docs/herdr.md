@@ -4,7 +4,18 @@
 chief's control plane: it spawns real agent terminals, isolates each in a git
 worktree, reports every agent's live status, lets the chief read a pane and send it
 text, and can notify the owner. **All commands below are verified against the running
-build** (`herdr <group> --help`). Config: `~/AppData/Roaming/herdr/`.
+build** (`herdr <group> --help`).
+
+**Config location** — the chief runs on more than one OS, so never hard-code one path:
+
+| platform | config file |
+| --- | --- |
+| macOS / Linux | `$XDG_CONFIG_HOME/herdr/config.toml`, i.e. `~/.config/herdr/config.toml` |
+| Windows | `%APPDATA%\herdr\config.toml` (`~/AppData/Roaming/herdr/`) |
+
+`HERDR_CONFIG_PATH` overrides the file outright on every platform, and `herdr
+--default-config` prints the fully-commented defaults. `herdr config check` validates
+the live file — use it rather than guessing where the config went.
 
 > Golden rule: the chief drives staff **only** through `herdr`. Sub-agents are summoned
 > by staff inside their own harness — never by the chief.
