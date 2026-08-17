@@ -28,8 +28,8 @@ the live file — use it rather than guessing where the config went.
 
 A staff agent is addressed by any of: its **terminal id** (`term_...`), its **pane id**
 (`w4:pD`), a unique **agent name**, or a detected label. `herdr agent list` prints all
-of these. Deliver messages with `scripts/herdr-send.py`, never `agent send` (see below);
-`pane run` writes a command **and** Enter, and is the right tool for a shell pane.
+of these. Deliver messages with `scripts/herdr-send.py`, never `agent send` (global
+guidelines §10); `pane run` writes a command **and** Enter, and is right for a shell pane.
 
 ## The primitives
 
@@ -77,30 +77,22 @@ python scripts/herdr-send.py <target> "<msg>" --force         # deliberate inter
 ```
 Pattern: `agent start ...` → wait for `idle` (agent booted) → `herdr-send.py <target> "<full task brief>"`.
 
-The helper re-resolves the pane id on every call, waits until the staff's input box is
-clear, delivers with `herdr pane run` (one atomic write: bracketed-paste text **plus** the
-Enter), and fails loudly if the message is still sitting in the box afterwards. It exits
-non-zero on every failure — **check the exit code**; a silent failure means the staff never
-got the message and will never reply.
-
 <a id="delivering-a-message-to-staff"></a>
-**Why not `herdr agent send`** (measured on the receiving TTY, 2026-08-17):
+**The rule itself is not chief-specific and does not live here.** Why `agent send` must
+never be used on a chat agent, how to deliver atomically, and how to recover when a
+delivery lands but does not submit are in **§10 of the global agent guidelines** — they
+bind every agent on the machine, chief or not. Read them there; don't restate them in this
+repo, or the two copies will drift.
 
-| command | bytes the agent actually receives |
-| --- | --- |
-| `pane send-text "HELLO"` | `HELLO` — no newline, **no submit** |
-| `pane send-keys Enter` | `\r` — a *separate* write, ~4 ms later |
-| `pane run "HELLO"` | `\x1b[200~HELLO\x1b[201~\r` — one atomic write |
+What is chief-specific is only this: the chief has a helper, so it never hand-rolls the
+sequence. `herdr-send.py` re-resolves the pane id, waits for a clear input box, delivers,
+verifies, and re-presses Enter only when the leftover text is its own message. **It exits
+non-zero on every failure — check the exit code**; a silent failure means the staff never
+got the brief and will never reply.
 
-`agent send` is raw keystroke injection, so it lands at the cursor inside whatever the
-input box already holds and fuses with the owner's half-typed text; and because the Enter
-is a second command, any time it is skipped, errors on a stale pane id, or loses a race,
-the message just sits in the draft. The box is never cleared, so **every later message
-piles onto the same stale draft and none are ever sent** — the staff sees nothing and the
-chief waits forever on a reply that cannot come. Multi-line briefs can't rescue themselves
-either: an embedded `\n` is inserted as a newline (both TUIs submit on `\r`, not `\n`).
-
-Raw `herdr pane run <pane_id> "<command>"` remains correct for driving a **shell** pane.
+The consequence to plan around: a staff pane with text parked in its input box **blocks**
+delivery. The helper waits (120s, `--wait` to change) and then fails rather than typing
+over the owner. If a brief will not go out, read that pane before retrying.
 
 ### Watch and wait (blocking)
 ```bash
@@ -161,13 +153,10 @@ git -C C:/Users/Tung/Projects/<proj> worktree remove --force "$WT"   # may need 
 
 ## Notes / gotchas
 
-- **Never `agent send` a chat agent — use `scripts/herdr-send.py`.** `agent send` is raw
-  keystroke injection with no submit, so briefs fuse with the owner's typing and, whenever
-  the follow-up Enter goes missing, pile up unsent in the draft forever. Full measurements
-  in [Hand a task](#delivering-a-message-to-staff). For a shell line, `pane run` is right.
-- **A message you can't prove landed did not land.** `herdr-send.py` exits non-zero on
-  every failure and verifies the box is clear afterwards; check the exit code instead of
-  assuming, then confirm the staff actually went `working`.
+- **Never `agent send` a chat agent — use `scripts/herdr-send.py`.** The reasoning lives in
+  §10 of the global guidelines, not here. For a shell line, `pane run` is right.
+- **A brief you can't prove landed did not land.** Check `herdr-send.py`'s exit code
+  instead of assuming, then confirm the staff actually went `working`.
 - **Fresh staff hit a trust-folder prompt.** A new claude in a new worktree asks
   "Is this a project you trust?" — option 1 is pre-selected, so `pane send-keys <pane> Enter`.
   It's the chief's own worktree, so this is a decide-on-evidence, not an escalate.
