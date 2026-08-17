@@ -61,8 +61,14 @@ PROMPT_MARKERS = ("❯", "›")
 # at the first blank row below the prompt. Either one ends the region we inspect.
 RULE_CHARS = set("─━═-")
 
+# How many normalized characters to compare when deciding whether text left in the
+# box is our own message or something the owner has started typing.
+MATCH_CHARS = 40
+
 ANSI_RE = re.compile(r"\x1b\[[0-9;:]*[A-Za-z]")
 SGR_RE = re.compile(r"\x1b\[([0-9;:]*)m")
+# A long paste can render as a placeholder instead of the text itself.
+PASTE_PLACEHOLDER_RE = re.compile(r"\[Pasted text|\+\d+ lines?\]")
 
 
 def fail(message: str) -> int:
@@ -151,6 +157,25 @@ def draft_text(pane_id: str) -> str:
         # \xa0 is the non-breaking space claude pads the prompt with.
         parts.append(text.replace("\xa0", " ").strip())
     return " ".join(part for part in parts if part).strip()
+
+
+def is_our_message(leftover: str, message: str) -> bool:
+    """True if the text still in the box looks like the message we just sent.
+
+    A non-empty box after delivery has two very different causes: our own Enter
+    was swallowed by a long paste, or the owner started typing something new in
+    the second or so since we delivered. Pressing Enter is the fix for the first
+    and actively wrong for the second — it would submit their half-typed line.
+    We know what we sent, so compare rather than assume.
+    """
+    box = " ".join(leftover.split())
+    sent = " ".join(message.split())
+    if not box:
+        return False
+    if PASTE_PLACEHOLDER_RE.search(box):
+        return True
+    width = min(len(box), len(sent), MATCH_CHARS)
+    return width > 0 and box[:width] == sent[:width]
 
 
 def resolve_pane(target: str) -> "tuple[str, str]":
@@ -246,13 +271,14 @@ def main() -> int:
 
         # `pane run` writes the text and the Enter in one go, but a long paste can
         # still swallow that trailing `\r` — the text lands and nothing submits.
-        # Confirm the box came back clear; if it didn't, press Enter again. That is
-        # safe here precisely because we waited for an empty box first: whatever is
-        # in there is our own message, not the owner's.
+        # So check the box afterwards; if our message is still sitting in it, press
+        # Enter again. Anything *else* in the box is the owner typing in the second
+        # since we delivered, which means our message did go through — leave their
+        # keystrokes alone rather than submitting a half-written line for them.
         for attempt in range(SUBMIT_RETRIES + 1):
             time.sleep(SETTLE_SECONDS)
             leftover = draft_text(pane_id)
-            if not leftover:
+            if not is_our_message(leftover, message):
                 break
             if attempt == SUBMIT_RETRIES:
                 return fail(
