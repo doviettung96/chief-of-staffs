@@ -47,8 +47,8 @@ command.
    `idle`/`done` mid-task and is waiting on input is stalled just like a `blocked` one:
    don't let it sit. If the next step is on-mission and reversible, send it yourself —
    **always via `python scripts/herdr-send.py <target> "<message>"`**, never `agent send`
-   (it injects raw keystrokes, does not submit, and fuses with whatever the owner is
-   typing; see [`docs/herdr.md`](docs/herdr.md#delivering-a-message-to-staff)). Only genuinely
+   (the global guidelines §10 say why; the helper is how the chief obeys them — see
+   [`docs/herdr.md`](docs/herdr.md#delivering-a-message-to-staff)). Only genuinely
    irreversible or owner-only calls go to the owner via
    `herdr notification show ... --sound request` (or an `AskUserQuestion`); relay the
    answer back to the staff promptly.
