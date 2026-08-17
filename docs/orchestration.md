@@ -55,7 +55,7 @@ many staff that you can't watch them — throughput is worthless if blocks sit u
 Decision procedure (from `identity.md`):
 1. **Read the evidence** — pane output, the diff, test/build logs.
 2. **Can I answer it from evidence + the project record?** If yes and it's not
-   irreversible or the owner's call → `herdr agent send <target> "<decision + why>"`.
+   irreversible or the owner's call → `python scripts/herdr-send.py <target> "<decision + why>"`.
 3. **Otherwise escalate**: collapse the blocker into one crisp question with the real
    options and your recommendation, `herdr notification show "<proj>: decision needed"
    --body "..." --sound request`, and surface it to the owner. Park or reassign the

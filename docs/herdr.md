@@ -17,7 +17,8 @@ build** (`herdr <group> --help`). Config: `~/AppData/Roaming/herdr/`.
 
 A staff agent is addressed by any of: its **terminal id** (`term_...`), its **pane id**
 (`w4:pD`), a unique **agent name**, or a detected label. `herdr agent list` prints all
-of these. `agent send` writes literal text; `pane run` writes a command **and** Enter.
+of these. Deliver messages with `scripts/herdr-send.py`, never `agent send` (see below);
+`pane run` writes a command **and** Enter, and is the right tool for a shell pane.
 
 ## The primitives
 
@@ -55,11 +56,40 @@ herdr agent start <name> --cwd <worktree-path> -- codex.cmd      # GPT-5.5 lane
 ```
 
 ### Hand a task / answer a block
+
+**Always deliver through the helper — never `herdr agent send`:**
 ```bash
-herdr agent send <target> "<task or decision text>"   # literal text into the agent
-herdr pane run <pane_id> "<command>"                   # command text + Enter
+python scripts/herdr-send.py <target> "<task brief or decision text>"
+python scripts/herdr-send.py <target> --stdin < brief.md      # long briefs
+python scripts/herdr-send.py <target> "<msg>" --wait 300      # owner types a lot
+python scripts/herdr-send.py <target> "<msg>" --force         # deliberate interrupt
 ```
-Pattern: `agent start ...` → wait for `idle` (agent booted) → `agent send <target> "<full task brief>"`.
+Pattern: `agent start ...` → wait for `idle` (agent booted) → `herdr-send.py <target> "<full task brief>"`.
+
+The helper re-resolves the pane id on every call, waits until the staff's input box is
+clear, delivers with `herdr pane run` (one atomic write: bracketed-paste text **plus** the
+Enter), and fails loudly if the message is still sitting in the box afterwards. It exits
+non-zero on every failure — **check the exit code**; a silent failure means the staff never
+got the message and will never reply.
+
+<a id="delivering-a-message-to-staff"></a>
+**Why not `herdr agent send`** (measured on the receiving TTY, 2026-08-17):
+
+| command | bytes the agent actually receives |
+| --- | --- |
+| `pane send-text "HELLO"` | `HELLO` — no newline, **no submit** |
+| `pane send-keys Enter` | `\r` — a *separate* write, ~4 ms later |
+| `pane run "HELLO"` | `\x1b[200~HELLO\x1b[201~\r` — one atomic write |
+
+`agent send` is raw keystroke injection, so it lands at the cursor inside whatever the
+input box already holds and fuses with the owner's half-typed text; and because the Enter
+is a second command, any time it is skipped, errors on a stale pane id, or loses a race,
+the message just sits in the draft. The box is never cleared, so **every later message
+piles onto the same stale draft and none are ever sent** — the staff sees nothing and the
+chief waits forever on a reply that cannot come. Multi-line briefs can't rescue themselves
+either: an embedded `\n` is inserted as a newline (both TUIs submit on `\r`, not `\n`).
+
+Raw `herdr pane run <pane_id> "<command>"` remains correct for driving a **shell** pane.
 
 ### Watch and wait (blocking)
 ```bash
@@ -99,9 +129,8 @@ herdr agent wait <task> --status idle --timeout 120000
 herdr agent read <task> --lines 20          # a fresh agent may ask "trust this folder?" — option 1
 herdr pane send-keys <pane_id> Enter        # accept (it's your own worktree)
 
-# 4. Brief — send the text, THEN submit with Enter (agent send does NOT press Enter).
-herdr agent send <task> "GOAL: ...  SCOPE: ...  DONE WHEN: ...  <commit / open a PR>"
-herdr pane send-keys <pane_id> Enter
+# 4. Brief — one atomic delivery; check the exit code, it is the only proof it landed.
+python scripts/herdr-send.py <task> "GOAL: ...  SCOPE: ...  DONE WHEN: ...  <commit / open a PR>"
 
 # 5. Watch — confirm it's working, then block until it finishes or blocks.
 herdr agent wait <task> --status working --timeout 30000
@@ -110,7 +139,7 @@ herdr agent wait <task> --status idle --timeout 300000
 # 6. Verify for real — do NOT trust the pane. Check the worktree git state and run the
 #    deliverable yourself (an API error can cut a staff off mid-task, before its commit).
 git -C "$WT" log --oneline -2 ; git -C "$WT" status --short
-#    If DONE WHEN is unmet, nudge the staff to finish (send + Enter) rather than doing it silently.
+#    If DONE WHEN is unmet, nudge the staff with herdr-send.py rather than finishing it silently.
 
 # 7. Integrate — see docs/git-worktrees.md; build/verify from the MERGED result.
 
@@ -121,9 +150,13 @@ git -C C:/Users/Tung/Projects/<proj> worktree remove --force "$WT"   # may need 
 
 ## Notes / gotchas
 
-- **`agent send` writes literal text and does NOT submit.** For a chat agent (claude/codex),
-  send the text then `herdr pane send-keys <pane_id> Enter`. For a shell line, use `pane run`
-  (command + Enter). This bit during the dry-run — the brief sat unsent until Enter.
+- **Never `agent send` a chat agent — use `scripts/herdr-send.py`.** `agent send` is raw
+  keystroke injection with no submit, so briefs fuse with the owner's typing and, whenever
+  the follow-up Enter goes missing, pile up unsent in the draft forever. Full measurements
+  in [Hand a task](#delivering-a-message-to-staff). For a shell line, `pane run` is right.
+- **A message you can't prove landed did not land.** `herdr-send.py` exits non-zero on
+  every failure and verifies the box is clear afterwards; check the exit code instead of
+  assuming, then confirm the staff actually went `working`.
 - **Fresh staff hit a trust-folder prompt.** A new claude in a new worktree asks
   "Is this a project you trust?" — option 1 is pre-selected, so `pane send-keys <pane> Enter`.
   It's the chief's own worktree, so this is a decide-on-evidence, not an escalate.
