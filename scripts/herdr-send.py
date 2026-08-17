@@ -48,6 +48,10 @@ POLL_SECONDS = 2.0
 # The box must read clear twice in a row before we deliver, so we don't slip a
 # message in during the instant between a submit and the next keystroke.
 CONFIRM_SECONDS = 0.7
+# After delivering, how long to let the TUI settle before checking the box, and how
+# many extra Enters to try if `pane run`'s own trailing `\r` was swallowed.
+SETTLE_SECONDS = 1.2
+SUBMIT_RETRIES = 2
 # Rows of pane to inspect. Small reads come back empty from `herdr pane read`.
 READ_LINES = 40
 
@@ -240,15 +244,22 @@ def main() -> int:
             detail = (proc.stderr or proc.stdout or "").strip().splitlines()
             return fail(f"delivery failed{': ' + detail[0] if detail else ''}")
 
-        # `pane run` is atomic, but the target may still be showing a dialog that
-        # swallowed it. Confirm the box came back clear rather than assuming.
-        time.sleep(1.0)
-        leftover = draft_text(pane_id)
-        if leftover:
-            return fail(
-                f"delivered to {label} ({pane_id}) but the box is not clear — the message "
-                f"may be sitting unsent. box holds: {leftover[:120]!r}"
-            )
+        # `pane run` writes the text and the Enter in one go, but a long paste can
+        # still swallow that trailing `\r` — the text lands and nothing submits.
+        # Confirm the box came back clear; if it didn't, press Enter again. That is
+        # safe here precisely because we waited for an empty box first: whatever is
+        # in there is our own message, not the owner's.
+        for attempt in range(SUBMIT_RETRIES + 1):
+            time.sleep(SETTLE_SECONDS)
+            leftover = draft_text(pane_id)
+            if not leftover:
+                break
+            if attempt == SUBMIT_RETRIES:
+                return fail(
+                    f"delivered to {label} ({pane_id}) but the box will not clear — the "
+                    f"message is sitting unsent. box holds: {leftover[:120]!r}"
+                )
+            herdr("pane", "send-keys", pane_id, "Enter")
     except RuntimeError as exc:
         return fail(str(exc))
     except (json.JSONDecodeError, ValueError) as exc:
