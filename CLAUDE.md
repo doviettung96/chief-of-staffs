@@ -1,1 +1,0 @@
-C:/Users/Tung/Projects/chief-of-staff/AGENTS.md
