@@ -1,6 +1,6 @@
 # Agents & models the chief works with
 
-Two lanes are available in this environment. The chief assigns each staff task to
+Three lanes are available in this environment. The chief assigns each staff task to
 the lane and variant that fits it. Verify the live roster any time with the commands
 at the bottom — do not trust this list blind; it is a snapshot.
 
@@ -20,14 +20,18 @@ at the bottom — do not trust this list blind; it is a snapshot.
 
 ## Lane B — codex (the "GPT-5.5" lane)
 
-- **Launch:** `codex` (codex-cli, `0.145.0` at last check), routed through a local
-  proxy (**CLIProxyAPI** on `http://127.0.0.1:8317`). Default staff model `gpt-5.5`,
-  reasoning effort `high`, plan-mode `xhigh` (`~/.codex/config.toml`).
-  - **Spawning staff on Windows:** launch via **`codex.cmd`**, not bare `codex` —
-    `herdr agent start <name> --cwd <path> -- codex.cmd`. herdr's raw
-    `CreateProcessW` can't run npm's extensionless `codex` shim (os error 193) and
-    the lane silently falls back to Claude. `codex ...` from Git Bash (e.g.
-    `codex exec` for a quick check) is unaffected. See [`herdr.md`](herdr.md) / LESSONS.md.
+- **Launch:** `staff.py spawn <name> --lane codex ...` runs `codex -m gpt-5.5 "<msg>"`
+  (codex-cli `0.145.0`, now a native exe at `...\Programs\OpenAI\Codex\bin\codex`, so
+  the old `codex.cmd` workaround is gone). Routed through a local proxy (**CLIProxyAPI**
+  on `http://127.0.0.1:8317`); reasoning effort `high`, plan-mode `xhigh`.
+  - **The model is passed explicitly** because `~/.codex/config.toml` itself now says
+    `model = "gpt-5.6-sol"` (seen 2026-11-22). `--model` on `spawn` overrides it.
+  - **codex reports no hc status**, not even in a dialog: the chief knows its state
+    only from its `staff.py report`s, and a codex worker that never reports shows as
+    `silent` on the board.
+  - **First worker in a repo hits two dialogs**: "trust this directory" (stored per
+    **repo root**, so once per repo covers all its worktrees), then a hook review (the
+    old herdr TUI's hook, inert under hc). Both are the owner's to answer.
 - **Default staff model:** `gpt-5.5`. Use this for staff unless the owner explicitly
   requests a different model. The GPT-5.6 variants are currently high-load and often
   report capacity errors, which can halt staff execution mid-task.
@@ -46,6 +50,20 @@ at the bottom — do not trust this list blind; it is a snapshot.
   unless the owner explicitly requests another model. Metered through CLIProxyAPI, so it can be
   unavailable — when it is, ask the owner before using Claude (never auto-fall-back).
 
+## Lane C — omp (the "GLM" lane)
+
+- **Launch:** `staff.py spawn <name> --lane omp ...` runs `omp "<msg>"` (omp `v19.1.0`).
+  Its own model roles pick the model: `default: delify/GLM-5.3`, `rea: delify/GLM-5.3-rea`
+  (`~/.omp/agent/config.yml`). `--model` on `spawn` overrides (`--model GLM-5.3-rea`).
+- **Watchable:** reports hc status itself (`app: omp`), and showed no first-run dialog
+  in a fresh worktree. It has the `rea` MCP tools connected.
+- **Resume:** `omp --continue` (what `staff.py respawn` uses).
+- **Verified 2026-11-22**: spawned in its own tab, fixed + tested + committed a bug, sent
+  4 reports, was killed and resumed: it checked its state, found the work done, and did
+  not repeat it.
+- **Role for staff:** available for any staff task the owner assigns to it. Like
+  every cheaper model, verify its `ready` claims in the worktree.
+
 ## Picking a lane per task
 
 **codex is the default for EVERY staff task. Claude staff requires explicit owner
@@ -57,20 +75,21 @@ the standing choice regardless of task shape, difficulty, or prod-sensitivity.
   design, refactor, debugging, mechanical fan-out, drafts — and for hard or prod-touching
   work too. Do **not** switch to Claude for "safety", "caution", or "checkpoint discipline"
   reasons; instead constrain codex through a tight brief and watch it closely.
-- **Claude staff — ask the owner first, every time.** Never `herdr agent start ... --
+- **Claude staff — ask the owner first, every time.** Never `staff.py spawn ... --lane
   claude` on your own initiative. Even when codex genuinely cannot run (CLIProxyAPI down,
   api-key expired/rate-limited, `gpt-5.5` at capacity, or a codex staff erroring mid-task that
   can't recover), you **stop and ask**: state the specific codex failure and request
   permission — "codex is <failure> — OK to run this on Claude instead?" — then wait for a
   yes. No silent auto-fallback. (Owner's rule, set 2026-07-29, after the chief auto-summoned
   Claude without asking — once on a codex-capacity fallback, once as a prod-safety judgment
-  call.) Note: WinError 193 on `-- codex` is the wrong invocation (`codex.cmd --yolo`), NOT a
-  codex failure — retry codex, don't ask for Claude.
+  call.) Note: a launch error from the codex binary itself (a wrong flag, a missing exe) is
+  the chief's invocation bug, NOT a codex failure — fix it and retry codex, don't ask for
+  Claude.
 
 The chief itself still runs on Opus (it is the Claude Code process the owner talks to);
 this policy is about which lane the chief spawns **staff** into.
 
-**State the lane before spawning.** Before every `herdr agent start`, say the lane and
+**State the lane before spawning.** Before every `staff.py spawn`, say the lane and
 the one-line reason: e.g. "Lane: codex (`gpt-5.5`)". If you believe Claude is warranted, do not
 spawn — ask the owner and wait.
 
@@ -82,6 +101,10 @@ spawn — ask the owner and wait.
 Raise effort for the hard reasoning stages; drop it for cheap mechanical fan-out.
 
 ## Verify the live roster
+
+```bash
+omp --version ; grep -A3 modelRoles ~/.omp/agent/config.yml   # omp lane + its model roles
+```
 
 ```bash
 # GPT / proxy models (needs the local proxy api-key from ~/CLIProxyAPI/config.yaml):

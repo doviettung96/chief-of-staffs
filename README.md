@@ -6,7 +6,7 @@ delegates, watches, unblocks, and integrates their work so the owner only sets g
 and answers the few decisions that truly need them.
 
 ```
-Owner (human)  →  Chief of Staff  →  Staff (1 per worktree, via herdr)  →  Sub-agents
+Owner (human)  →  Chief of Staff  →  Staff (1 per worktree, via hc)  →  Sub-agents
    L0                  L1                        L2                            L3
 ```
 
@@ -14,8 +14,8 @@ Owner (human)  →  Chief of Staff  →  Staff (1 per worktree, via herdr)  → 
 
 1. [`identity.md`](identity.md) — who the Chief is; the 4-level chain of command.
 2. [`docs/orchestration.md`](docs/orchestration.md) — the loop the Chief runs.
-3. [`docs/herdr.md`](docs/herdr.md) — how it spawns and drives staff.
-4. [`docs/agents.md`](docs/agents.md) — the Claude/Opus and codex/GPT-5.5 lanes.
+3. [`docs/hc.md`](docs/hc.md) — how it spawns, hears from, and drives staff.
+4. [`docs/agents.md`](docs/agents.md) — the codex, omp and Claude lanes.
 5. [`docs/git-worktrees.md`](docs/git-worktrees.md) — conflict-free integration.
 6. [`AGENTS.md`](AGENTS.md) — the full index and core rules.
 
@@ -23,12 +23,13 @@ Owner (human)  →  Chief of Staff  →  Staff (1 per worktree, via herdr)  → 
 
 ```
 identity.md            who the Chief is
-docs/                  the operating manual (orchestration, herdr, agents, git)
+docs/                  the operating manual (orchestration, hc, agents, git)
 projects/              per-project registry — one folder per managed project
   <name>/overview.md   about + vision + focus        (human-owned)
   <name>/decisions.md  past decisions and why        (human-owned)
   <name>/lessons.md    mirror of the project's LESSONS.md   (generated)
   <name>/status.md     live git + PRs + agents        (generated)
+scripts/staff.py       spawn / board / respawn / teardown staff; staff `report`
 scripts/sync-project.py  onboard/refresh a project entry
 LESSONS.md             the Chief's own operating lessons
 ```

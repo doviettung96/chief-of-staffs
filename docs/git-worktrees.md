@@ -1,6 +1,6 @@
 # Conflict-free git: worktrees, branches, and merge decisions
 
-Many staff run in parallel, often on the **same project**, across many `herdr` sessions.
+Many staff run in parallel, often on the **same project**, across many hc terminals.
 Conflicts are therefore *expected* — the chief's job is to make them rare by design and
 resolve them deliberately. This is the integration discipline.
 
@@ -9,8 +9,8 @@ resolve them deliberately. This is the integration discipline.
 1. **One task → one worktree → one branch → one staff.** Never two staff on one branch.
 2. **Every worktree is disposable.** Create it to do the task, remove it once merged or
    abandoned. Nothing important lives only in a worktree.
-3. **The source checkout is sacred.** Staff work in *linked* worktrees (herdr creates
-   them off in a temp/scratch path); the owner's primary checkout of the repo is never
+3. **The source checkout is sacred.** Staff work in *linked* worktrees (created off
+   in a sibling path such as `<projects>/.worktrees/<repo>/<task>`); the owner's primary checkout of the repo is never
    where a staff agent runs.
 
 ## Preventing conflicts (before they happen)
@@ -25,8 +25,8 @@ resolve them deliberately. This is the integration discipline.
   them in parallel — run one, merge it, rebase the second on the result, then run it.
 
 ```bash
-herdr worktree create --cwd C:/Users/Tung/Projects/<proj> \
-  --branch feat/<task> --base <integration-branch> --label "<task>" --json
+git -C <repo> worktree add <projects>/.worktrees/<repo>/<task> -b feat/<task> <integration-branch>
+python scripts/staff.py spawn <task> --lane <lane> --cwd <projects>/.worktrees/<repo>/<task> --brief-file brief.md
 ```
 
 ## Integrating (when a staff opens a PR)
@@ -66,16 +66,15 @@ The chief owns the merge queue. Process PRs **one at a time** per project:
 
 ```bash
 gh pr merge <n> --squash --delete-branch      # remote branch gone
-herdr worktree remove --workspace <id>        # local worktree gone
+python scripts/staff.py teardown <task>        # end + remove the staff terminal
+git -C <repo> worktree remove <worktree>       # local worktree gone (busy? see docs/hc.md gotchas)
 git -C <repo> worktree prune                   # tidy stale entries
-herdr pane close <pane_id>                      # close the finished agent
 ```
 
 ## Quick reference
 
 ```bash
-herdr worktree list --cwd <repo> --json                       # what worktrees exist
-git -C <repo> worktree list                                    # same, raw git
+git -C <repo> worktree list                                    # what worktrees exist
 gh pr list --state open --json number,title,headRefName,mergeable   # the merge queue
 gh pr view <n> --json mergeable,mergeStateStatus,files          # is #n safe to merge
 python scripts/sync-project.py <proj>                           # refresh status.md

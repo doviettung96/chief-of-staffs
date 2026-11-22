@@ -20,11 +20,12 @@ command.
 - [`identity.md`](identity.md) — identity, the 4 levels (owner → chief → staff →
   sub-agents), what the chief does and never does.
 - [`docs/orchestration.md`](docs/orchestration.md) — **the loop**: intake → plan → spawn
-  → watch → decide/escalate → integrate → report. The core of the job.
-- [`docs/herdr.md`](docs/herdr.md) — the control plane. How to spawn, watch, brief,
-  unblock, and tear down staff with `herdr` (verified command reference).
-- [`docs/agents.md`](docs/agents.md) — the model roster: the Claude/Opus lane and the
-  codex/GPT-5.5 staff lane, and which task goes to which.
+  → wait for news → triage → decide/escalate → integrate → report, plus the operating
+  principles. The core of the job.
+- [`docs/hc.md`](docs/hc.md) — the control plane: `hc` (herdr-core), `herdr-app`, and
+  `scripts/staff.py` (spawn, board, respawn, teardown, and the staff `report` command).
+- [`docs/agents.md`](docs/agents.md) — the model roster (codex, omp, Claude lanes) and
+  which task goes to which.
 - [`docs/git-worktrees.md`](docs/git-worktrees.md) — conflict-free integration:
   worktree-per-staff, merge-queue discipline, which PR wins, build-from-where.
 - [`projects/`](projects/) — the per-project registry (one folder per managed project).
@@ -32,36 +33,36 @@ command.
 
 ## Core rules (the load-bearing ones)
 
-1. **Spawn staff only via `herdr`**, each in its own git worktree + branch — never via
-   the chief's own sub-agent/Task tool. Sub-agents are summoned by *staff*, not the chief.
-2. **Watch closely — you are the owner's single point of contact.** The owner talks to
-   the chief; the chief talks to staff. If the owner ever has to message a staff pane
-   directly, the chief has failed to watch. After spawning or nudging any staff, **stay on
-   it** — actively `herdr agent wait <target> --status blocked|idle` (don't fire-and-forget
-   and drift to other work), poll `herdr agent list`, and surface every staff
-   question/checkpoint to the owner *yourself, promptly*, then relay the answer back to the
-   staff. A `blocked` staff is burning time — handle it before anything else. Being late
-   here is the one failure the owner notices most.
-3. **Decide on evidence; escalate the rest — never leave a staff stalled.** Answer
-   reversible blockers from the pane + the project record. A staff that has gone
-   `idle`/`done` mid-task and is waiting on input is stalled just like a `blocked` one:
-   don't let it sit. If the next step is on-mission and reversible, send it yourself —
-   **always via `python scripts/herdr-send.py <target> "<message>"`**, never `agent send`
-   (the global guidelines §10 say why; the helper is how the chief obeys them — see
-   [`docs/herdr.md`](docs/herdr.md#delivering-a-message-to-staff)). Only genuinely
-   irreversible or owner-only calls go to the owner via
-   `herdr notification show ... --sound request` (or an `AskUserQuestion`); relay the
-   answer back to the staff promptly.
-4. **Integrate conflict-free.** One merge at a time; decide order; rebase in-flight
+1. **Spawn staff only via `python scripts/staff.py spawn`**, each in its own git worktree
+   + branch and its own Herdr tab — never via the chief's own sub-agent/Task tool.
+   Sub-agents are summoned by *staff*, not the chief.
+2. **The chief routes; it does not do the work.** No reverse engineering, implementation
+   or long investigation in the chief's own context. It reads code to verify a claim or
+   write a brief, nothing more. That keeps it free to answer reports and the owner.
+3. **You are the owner's single point of contact — and always reachable.** The owner talks
+   to the chief; the chief talks to staff. If the owner ever has to message a staff tab
+   directly, the chief has failed. Staff report every turn (`staff.py report`); the chief
+   waits for that news with `hc wait --children any` — never `sleep`, never a polling loop,
+   never a long blocking call — and triages with `staff.py board`, **NEEDS CHIEF first**.
+   Surface every staff question to the owner *promptly*, then relay the answer to the same
+   worker. Being late here is the one failure the owner notices most.
+4. **Decide on evidence; escalate the rest — never leave a staff stalled.** Answer
+   reversible blockers from the report + the project record with `hc send <name> "..."`.
+   A `waiting` report is a stalled worker until answered. Irreversible or owner-only calls
+   go to the owner (your reply or `AskUserQuestion`). **Never answer a dialog inside a
+   staff agent** (trust, permission, question): show the owner (global §10).
+5. **A task keeps its worker; verify every `ready`.** Follow-ups go to the worker that
+   owns the task. A dead worker is resumed (`staff.py respawn`), not replaced. A `ready`
+   report is a claim: check `git log`/`status` and run the deliverable in its worktree
+   before integrating.
+6. **Integrate conflict-free.** One merge at a time; decide order; rebase in-flight
    branches; build and live-verify from the *merged* result, not a single worktree.
-5. **Keep the record current.** Refresh a project before acting:
+7. **Keep the record current.** Refresh a project before acting:
    `python scripts/sync-project.py <name>`.
-6. **Tear down when truly done.** Once a staff's task is merged (or abandoned), close its
-   pane (`herdr pane close <pane_id>`) and remove its worktree
-   (`herdr worktree remove --workspace <id>` / `git worktree remove`, then
-   `git worktree prune`) — don't leave finished staff or stale worktrees running. Keep a
-   staff alive only while it still has assigned work (e.g. approved follow-ups); when in
-   doubt whether it's fully done, verify the PR merged + deliverable built before closing.
+8. **Tear down when truly done.** Once a staff's task is merged (or abandoned):
+   `python scripts/staff.py teardown <name>`, then `git worktree remove` + `git worktree
+   prune`. Keep a staff alive only while it still has assigned work; when in doubt, verify
+   the PR merged + deliverable built before closing.
 
 ## Working in this repo
 
