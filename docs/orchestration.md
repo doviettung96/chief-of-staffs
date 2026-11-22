@@ -74,6 +74,9 @@ not a failure: look at the board, then wait again. Do not loop on `hc ls`, do no
 | --- | --- | --- |
 | report `waiting` | it asked a question (in the note) | answer it from evidence + the record, or escalate (step 6) |
 | report `blocked` / `failed` | it cannot go on | read the note + `--details`, decide: unblock, re-scope, or stop |
+| report `blocked` on an approval | a UAC Bridge `409 review_required` or a tool's prompt | show the owner the fingerprint/prompt. Neither you nor the worker accepts it |
+| details mention something **out of scope** | a bug or flaw it saw but left (its rule) | make it a task (or a note in the project record); don't let the worker widen its scope |
+| details propose a **lesson** | it may not write `LESSONS.md` itself | collect them, ask the owner once per batch (global §6), relay the answer |
 | hc `blocked` | a permission/question dialog in the agent | `hc read` it and show the owner. Never answer it yourself |
 | `silent` | no report, no status for 90 s | `hc read` it. Usually a first-run dialog (codex) or a hung tool |
 | `exited(n)` | the process died | `staff.py respawn <name>` if the task is still live |
@@ -99,7 +102,26 @@ and verify from the **merged** result ([`docs/git-worktrees.md`](git-worktrees.m
 ### 8. Report and tear down
 Tell the owner what merged, what is in flight, what is blocked on them and what is next.
 `staff.py teardown <name>`, remove the worktree, refresh `status.md`. Capture non-obvious
-lessons (global §6: ask before saving).
+lessons, yours and the ones staff proposed (global §6: ask before saving). A project
+lesson the owner approves is written by the worker in its branch, so it ships with the PR;
+a global one (`~/.agents/LESSONS.md`) is written by the chief alone, so parallel workers
+never edit that shared file at the same time.
+
+## Staff mode: the two halves of every "ask the owner"
+
+The global guidelines were written for an agent with the owner in front of it. Staff have
+the chief in front of them instead. Global §12 (and the brief `staff.py` writes, which is
+the only thing every lane is sure to read: omp does not load the global file, and omp and
+codex do not load `D:/Projects/AGENTS.md`) turns each "ask me" into a report to the chief.
+The chief owns the other half:
+
+| the worker's rule | the chief's half |
+| --- | --- |
+| ask / show / tell the owner → `report waiting` / `blocked` | answer from evidence, or carry it to the owner and relay back |
+| stay in scope; out-of-scope findings go in details | turn them into tasks or project notes |
+| propose lessons, write none | batch them, ask the owner, then have them written (above) |
+| only the targets in the brief | give every worker its own target, and say which in the brief |
+| never accept an approval (UAC Bridge `409`, a tool prompt) | show the owner, never accept it either |
 
 ## Operating principles
 

@@ -46,8 +46,12 @@ python $S teardown <name>
 
 **`spawn <name> --lane omp|codex|claude --cwd <wt> --brief-file <f>`**
 - Writes the brief to `~/.chief-of-staff/staff/<name>/brief.md` (`CHIEF_STATE_DIR`
-  overrides the root) **with the report protocol appended**. The agent's first message only
-  points at that file, so a restarted worker can re-read the same brief.
+  overrides the root) **with the report protocol and the staff-mode rules appended**
+  (global §12 in short: "ask the owner" means report to the chief, stay in scope, propose
+  lessons, only the named targets, never accept an approval), plus a pointer to the
+  workspace `AGENTS.md` above the repo (`D:/Projects/AGENTS.md`: UAC Bridge), which omp and
+  codex don't load themselves. The agent's first message only points at that file, so a
+  restarted worker can re-read the same brief.
 - Starts the lane's agent with `hc run --bg --outlive-parent`: the worker is the chief's
   child (its reports and exit notes come to the chief, `hc wait --children` sees it), but it
   survives if the chief's own session ends.

@@ -58,6 +58,10 @@ at the bottom — do not trust this list blind; it is a snapshot.
 - **Watchable:** reports hc status itself (`app: omp`), and showed no first-run dialog
   in a fresh worktree. It has the `rea` MCP tools connected.
 - **Resume:** `omp --continue` (what `staff.py respawn` uses).
+- **Instructions it loads** (asked it, 2026-11-22): only `~/.omp/agent/AGENTS.md` and the
+  repo's `AGENTS.md`. Not the global guidelines (deliberately: that file claims omp's
+  user slot) and not `D:/Projects/AGENTS.md`. Its file carries a copy of global §10 and a
+  summary of §12 (staff mode); the brief `staff.py` writes carries the rest.
 - **Verified 2026-11-22**: spawned in its own tab, fixed + tested + committed a bug, sent
   4 reports, was killed and resumed: it checked its state, found the work done, and did
   not repeat it.

@@ -231,23 +231,62 @@ At the end of **every** turn, and immediately whenever you need a decision, run 
 - Long content (findings, logs, a design) goes in a Markdown file; pass its path with `--details`.
 - After `waiting`, stop and wait: the chief's answer arrives as your next message.
 - Never report `ready` before verifying. An open PR alone is not ready.
-- Do not start other agents or terminals unless this brief says so.
-- Kill only processes you started, by PID. Never by image name, never a process tree.
 - If you are restarted, you get a recovery note: check your folder, `git log` and
   anything outside (devices, game processes, PRs) **before** repeating an outside action.
 
+## You are staff: what that changes
+
+Your general instructions may assume the owner is in front of you. Here they are not: the
+owner talks to the chief, and nobody watches your tab.
+
+- **"Ask / show / tell the owner" means: report to the chief.** `waiting` with the
+  question, `blocked` when only the owner can unblock it. Never stop to ask in your tab.
+- **Stay in scope.** Other staff are editing other files right now. A bug, broken window
+  or UI flaw outside this brief's scope (a typo in output, a wrong message, a flaky test)
+  goes in your details file, not into a fix. Every `ready` report ends with
+  `Out of scope: <what you noticed and left>` or `Out of scope: nothing noticed`.
+- **Lessons:** propose them in a details file with a suggested scope (project or global).
+  Write no `LESSONS.md` until the chief relays the owner's answer.
+- **Targets:** verify for real, but only against the targets this brief names (game
+  client, emulator, device, port, window). Never touch another one, not even to look.
+- **Approvals only the owner gives** (a UAC Bridge `409 review_required`, a tool's own
+  prompt): never accept them. Report `blocked` with the prompt text or fingerprint.
+- Do not start other agents or terminals unless this brief says so.
+- Kill only processes you started, by PID. Never by image name, never a process tree.
+{workspace}
 Your brief file (re-read it after a restart): `{brief_path}`
 """
 
 
-def write_brief(name: str, chief: str, body: str) -> Path:
+def workspace_rules(cwd: Path) -> Path | None:
+    """The shared AGENTS.md of the folder that holds the repo (e.g. D:/Projects/AGENTS.md).
+
+    Claude loads it from parent folders by itself; omp and codex stop at the repo, so
+    the brief points every lane at it.
+    """
+    for folder in repo_root_of(cwd).parents:
+        candidate = folder / "AGENTS.md"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def write_brief(name: str, chief: str, body: str, cwd: Path) -> Path:
     path = worker_dir(name) / "brief.md"
+    shared = workspace_rules(cwd)
+    workspace = (
+        f"- **Workspace rules** every agent here follows (elevated/admin actions go through the\n"
+        f"  UAC Bridge, for example): read `{shared.as_posix()}` before any such action.\n"
+        if shared
+        else ""
+    )
     protocol = REPORT_PROTOCOL.format(
         name=name,
         chief=chief,
         script=Path(__file__).resolve().as_posix(),
         note_max=NOTE_MAX,
         brief_path=path.as_posix(),
+        workspace=workspace,
     )
     path.write_text(body.rstrip() + "\n" + protocol, encoding="utf-8")
     return path
@@ -310,7 +349,7 @@ def cmd_spawn(a: argparse.Namespace) -> int:
         raise StaffError("give the brief with --brief-file or --brief")
 
     chief = chief_address()
-    brief_path = write_brief(a.name, chief, body)
+    brief_path = write_brief(a.name, chief, body, cwd)
     root = repo_root_of(cwd)
     space = a.space or ensure_space(a.space_name or root.name, root)
     argv = lane_argv(a.lane, "start", a.model) + list(a.agent_arg or []) + [first_message(a.name, brief_path)]

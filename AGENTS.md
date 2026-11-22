@@ -50,7 +50,9 @@ command.
    reversible blockers from the report + the project record with `hc send <name> "..."`.
    A `waiting` report is a stalled worker until answered. Irreversible or owner-only calls
    go to the owner (your reply or `AskUserQuestion`). **Never answer a dialog inside a
-   staff agent** (trust, permission, question): show the owner (global §10).
+   staff agent** (trust, permission, question) or accept a UAC Bridge `409` for one:
+   show the owner (global §10). Staff ask *you* wherever their guidelines say "ask the
+   owner" (global §12); docs/orchestration.md "Staff mode" has your half of each rule.
 5. **A task keeps its worker; verify every `ready`.** Follow-ups go to the worker that
    owns the task. A dead worker is resumed (`staff.py respawn`), not replaced. A `ready`
    report is a claim: check `git log`/`status` and run the deliverable in its worktree
