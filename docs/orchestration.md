@@ -57,14 +57,23 @@ Write the brief so the worker can start without asking. Its first message only p
 the brief file. A spawn that exits 2 (`needs_owner`) is held by a first-run dialog: show the
 owner, never answer it.
 
-### 4. Wait for news (never poll)
-```bash
-hc wait --children any --timeout 600
-```
-It returns on the **next piece of news**: a staff report (`reason: message`), a child that
-blocked, errored or exited, or the owner typing to the chief. A `timeout` is a check-in,
-not a failure: look at the board, then wait again. Do not loop on `hc ls`, do not
-`sleep`, and do not block on one worker while others report.
+### 4. Wait for news: end your turn (never poll)
+A staff report is typed into the chief's terminal, so in a Claude chief it arrives as a
+**new message, even when the chief is idle**: it starts the chief's next turn by itself
+(verified 2026-11-23: the chief ended its turn, the worker's `ready` report started the
+next one; the same happens when hc notes that a worker exited). So after spawning,
+answering or triaging, **end your turn**. The owner can talk to you any time, and the
+next report wakes you.
+
+- **On every wake**, whatever woke you (a report, the owner, an exit note), run
+  `staff.py board` before anything else. Several workers may have moved.
+- **What wakes nobody** is a worker that hangs, or ends a turn without reporting. The
+  board flags both (`silent`, `no-report`), but only when someone looks. So while staff
+  are live, keep one background timer running as a heartbeat (in Claude Code: a Bash
+  `sleep 1800` with `run_in_background`; its end wakes you). When it fires, run the board
+  and start the next one. Keep only one.
+- **Need to block on one thing?** (a build you must see before replying) `hc wait <t>
+  --timeout <s>` is fine. Never `sleep` in the foreground, never loop on `hc ls`.
 
 ### 5. Triage
 `python scripts/staff.py board`. Handle **NEEDS CHIEF** first, then **READY**, and leave
@@ -78,7 +87,8 @@ not a failure: look at the board, then wait again. Do not loop on `hc ls`, do no
 | details mention something **out of scope** | a bug or flaw it saw but left (its rule) | make it a task (or a note in the project record); don't let the worker widen its scope |
 | details propose a **lesson** | it may not write `LESSONS.md` itself | collect them, ask the owner once per batch (global §6), relay the answer |
 | hc `blocked` | a permission/question dialog in the agent | `hc read` it and show the owner. Never answer it yourself |
-| `silent` | no report, no status for 90 s | `hc read` it. Usually a first-run dialog (codex) or a hung tool |
+| `no-report` | it finished a turn and sent nothing | `hc read` it: done but forgot, stuck, or asking in its own tab. Answer or remind it to report |
+| `silent` | no report, no status for 90 s | `hc read` it. Usually a first-run dialog or a hung tool |
 | `exited(n)` | the process died | `staff.py respawn <name>` if the task is still live |
 | report `ready` | it claims DONE WHEN | **verify it yourself** (step 7). Its claim is not evidence |
 
@@ -111,8 +121,8 @@ never edit that shared file at the same time.
 
 The global guidelines were written for an agent with the owner in front of it. Staff have
 the chief in front of them instead. Global §12 (and the brief `staff.py` writes, which is
-the only thing every lane is sure to read: omp does not load the global file, and omp and
-codex do not load `D:/Projects/AGENTS.md`) turns each "ask me" into a report to the chief.
+the only thing every lane is sure to read: omp loads neither the global file nor
+`D:/Projects/AGENTS.md`) turns each "ask me" into a report to the chief.
 The chief owns the other half:
 
 | the worker's rule | the chief's half |
@@ -133,13 +143,13 @@ went wrong here. Each one names the failure it prevents.
    deep in a decompile is a chief not answering reports, and its context fills with detail
    that crowds out the fleet. It reads code only to verify a claim or to write a brief.
 2. **Staff report their state; the chief never guesses it from a screen.** Every turn ends
-   with `staff.py report`. hc status is a fallback, and codex has none. `idle` alone can
-   mean done, stuck or waiting.
-3. **News is pushed, not polled.** `hc wait --children any` is the only waiting the chief
-   does. No `sleep`, no polling loops, no long blocking call on a single worker.
-4. **The owner always gets through.** The owner talks to the chief; a message from the
-   owner ends the chief's wait (`reason: message`). Never sit in a command that blocks
-   longer than a few minutes. Run slow builds and tests in an hc terminal
+   with `staff.py report`. hc status is a fallback: `idle` alone can mean done, stuck or
+   waiting. A turn that ends without a report shows as `no-report` on the board.
+3. **News is pushed, not polled.** Reports arrive as messages and wake the chief, so it
+   ends its turn instead of waiting. A background heartbeat covers workers that go quiet.
+   No foreground `sleep`, no polling loops, no long blocking call on a single worker.
+4. **The owner always gets through.** The owner talks to the chief; an idle chief hears
+   them at once. Never sit in a command that blocks longer than a few minutes. Run slow builds and tests in an hc terminal
    (`hc run --bg ... ; hc wait`). Answer "what's going on?" from the board, not by reading
    every screen.
 5. **A task keeps its worker.** Follow-ups, answers and "also do X" go to the worker that

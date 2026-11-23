@@ -15,7 +15,7 @@ Owner (human)  →  Chief of Staff  →  Staff (1 per worktree, via hc)  →  Su
 1. [`identity.md`](identity.md) — who the Chief is; the 4-level chain of command.
 2. [`docs/orchestration.md`](docs/orchestration.md) — the loop the Chief runs.
 3. [`docs/hc.md`](docs/hc.md) — how it spawns, hears from, and drives staff.
-4. [`docs/agents.md`](docs/agents.md) — the codex, omp and Claude lanes.
+4. [`docs/agents.md`](docs/agents.md) — the omp (staff default) and Claude lanes.
 5. [`docs/git-worktrees.md`](docs/git-worktrees.md) — conflict-free integration.
 6. [`AGENTS.md`](AGENTS.md) — the full index and core rules.
 

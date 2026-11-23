@@ -26,9 +26,9 @@ git -C <repo> worktree add <wt> -b <branch> <base>
 python $S spawn <name> --lane omp --cwd <wt> --brief-file brief.md
 #    exit 2 + "needs_owner" = a first-run dialog holds it -> show the owner, never answer it
 
-# 3. Wait for news. Never sleep or poll.
-hc wait --children any --timeout 600   # wakes on a staff report, a child blocking/erroring/exiting,
-                                       # or the owner typing to the chief
+# 3. Wait for news: END YOUR TURN. A report is typed into the chief and starts its next
+#    turn, idle or not. Keep one background heartbeat (Bash `sleep 1800`, run_in_background)
+#    while staff are live, for workers that go quiet. Never foreground-sleep or poll.
 # 4. Triage
 python $S board                        # NEEDS CHIEF first, then READY, then WORKING
 
@@ -44,13 +44,13 @@ python $S teardown <name>
 
 ## What `staff.py` does, exactly
 
-**`spawn <name> --lane omp|codex|claude --cwd <wt> --brief-file <f>`**
+**`spawn <name> [--lane omp|claude] --cwd <wt> --brief-file <f>`** (omp by default)
 - Writes the brief to `~/.chief-of-staff/staff/<name>/brief.md` (`CHIEF_STATE_DIR`
   overrides the root) **with the report protocol and the staff-mode rules appended**
   (global §12 in short: "ask the owner" means report to the chief, stay in scope, propose
   lessons, only the named targets, never accept an approval), plus a pointer to the
-  workspace `AGENTS.md` above the repo (`D:/Projects/AGENTS.md`: UAC Bridge), which omp and
-  codex don't load themselves. The agent's first message only points at that file, so a
+  workspace `AGENTS.md` above the repo (`D:/Projects/AGENTS.md`: UAC Bridge), which omp
+  doesn't load itself. The agent's first message only points at that file, so a
   restarted worker can re-read the same brief.
 - Starts the lane's agent with `hc run --bg --outlive-parent`: the worker is the chief's
   child (its reports and exit notes come to the chief, `hc wait --children` sees it), but it
@@ -67,7 +67,8 @@ python $S teardown <name>
 **`report <state> "<note>" [--details <file>]`** (run *by staff*)
 - States: `progress`, `waiting` (needs an answer), `ready` (done **and** verified),
   `blocked`, `failed`.
-- Sets `chief.state` / `chief.note` / `chief.details` / `chief.report_ms` on the worker's own
+- Sets `chief.state` / `chief.note` / `chief.details` / `chief.report_ms` /
+  `chief.report_turn` (hc's turn counter, for the board's `no-report` check) on the worker's own
   terminal, appends to `~/.chief-of-staff/staff/<name>/reports.jsonl`, and `hc send`s one line
   to the chief: `[staff-report] <name> <state>: <note>`. It arrives as an `<hc from=...>`
   message, which is a staff report, **not** the owner.
@@ -76,13 +77,14 @@ python $S teardown <name>
 
 **`board [--all]`** reads every staff terminal's labels plus hc's own status and groups them:
 - **NEEDS CHIEF**: `waiting`/`blocked`/`failed` reports, hc `blocked`/`error`, exited
-  workers, and **silent** ones (no report and no hc status for 90 s; it names the
-  first-run dialog when it sees one).
+  workers, **`no-report`** ones (the worker finished a turn, is idle, and sent no report
+  for it: done, stuck, or asking in its own tab) and **silent** ones (no report and no hc
+  status at all for 90 s; it names the first-run dialog when it sees one).
 - **READY TO INTEGRATE**: `ready` reports. Verify them yourself before trusting them.
 - **WORKING**: everything else.
 
 **`respawn <name>`** restarts a *finished* worker in its own folder with the lane's resume
-command (`omp --continue`, `claude --continue`, `codex resume --last`). Its worktree is its
+command (`omp --continue`, `claude --continue`). Its worktree is its
 own, so "continue the last session here" means its own session. It sends a **recovery note**:
 re-read the brief, check git and every outside effect before repeating anything. For a live
 worker it refuses: send it the next step instead.
@@ -96,13 +98,10 @@ the merge.
 | --- | --- | --- | --- |
 | omp | `omp [--model M] "<msg>"` (default role GLM-5.3) | **yes** (`app: omp`) | none seen |
 | claude | `claude [--model M] "<msg>"` | **yes** (`app: claude-code`) | folder trust, once per folder |
-| codex | `codex -m gpt-5.5 "<msg>"` | **none at all**, even in a dialog | repo trust (once per **repo root**, so it covers every worktree of that repo), then hook review |
 
-- codex reporting nothing is why the **staff report is the done signal**, not hc status.
-- codex 0.145 is a native exe now (`...\Programs\OpenAI\Codex\bin\codex`): no more
-  `codex.cmd`. It also rejects `--no-daemon`, which the hc manual tells you to pass.
-- The hook codex asks about is the **old herdr TUI's** `~/.codex/herdr-agent-state.ps1`.
-  Under hc it does nothing (it exits unless `HERDR_ENV=1`).
+- hc status says whether an agent is busy, not whether its task is done: `idle` can mean
+  done, stuck, or asking a question in its own tab. That is why the **staff report is the
+  done signal**, and why the board flags a turn that ended without one (`no-report`).
 
 ## Raw `hc` you still use directly
 

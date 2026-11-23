@@ -3,7 +3,7 @@
 
 The chief uses it to start, watch, restart and tear down staff. Staff use it to report.
 
-  staff.py spawn <name> --lane omp|codex|claude --cwd <worktree> --brief-file <f>
+  staff.py spawn <name> [--lane omp|claude] --cwd <worktree> --brief-file <f>
   staff.py board [--all]
   staff.py respawn <name>
   staff.py teardown <name>
@@ -14,8 +14,9 @@ Design (docs/orchestration.md has the why):
 * The chief does not read staff screens to learn their state. Every staff worker
   ends every turn with `staff.py report <state> ...`, which records the state on the
   worker's own hc labels (durable, survives a core restart, visible in `board`) and
-  sends a one-line report to the chief's terminal, where `hc wait --children any`
-  wakes on it. hc's own status is a fallback only: codex reports none at all.
+  sends a one-line report to the chief's terminal. In a Claude chief it arrives as a
+  new message, idle or not. hc's own status is a fallback only: `idle` can mean done,
+  stuck or waiting.
 * The brief lives in a file (STATE_DIR/<name>/brief.md), not only in the agent's
   first message, so a restarted worker can re-read it.
 * Every long-running worker is visible in the Herdr window: one space per project,
@@ -49,12 +50,6 @@ LANES = {
         "resume": ["omp", "--continue"],
         "model_flag": "--model",
         "default_model": None,  # omp's own default role (GLM-5.3 on this box)
-    },
-    "codex": {
-        "start": ["codex"],
-        "resume": ["codex", "resume", "--last"],
-        "model_flag": "-m",
-        "default_model": "gpt-5.5",  # docs/agents.md; ~/.codex/config.toml may say otherwise
     },
     "claude": {
         "start": ["claude"],
@@ -174,12 +169,9 @@ def name_tab(terminal: str, label: str, attempts: int = 10) -> bool:
     return False
 
 
-# First-run dialogs that hold a fresh worker before it reads its brief. codex reports
-# no hc status at all, so these never show as `blocked`: they show as silence. The
-# chief never answers them itself (global guidelines §10): it shows the owner.
+# First-run dialogs that hold a fresh worker before it reads its brief. The chief never
+# answers them itself (global guidelines §10): it shows the owner.
 FIRST_RUN_DIALOGS = (
-    ("Do you trust the contents of this directory", "codex: trust this repo (once per repo root)"),
-    ("Hooks need review", "codex: review / trust its hooks"),
     ("Do you trust the files in this folder", "claude: trust this folder"),
     ("Is this a project you trust", "claude: trust this folder"),
 )
@@ -261,7 +253,7 @@ Your brief file (re-read it after a restart): `{brief_path}`
 def workspace_rules(cwd: Path) -> Path | None:
     """The shared AGENTS.md of the folder that holds the repo (e.g. D:/Projects/AGENTS.md).
 
-    Claude loads it from parent folders by itself; omp and codex stop at the repo, so
+    Claude loads it from parent folders by itself; omp stops at the repo, so
     the brief points every lane at it.
     """
     for folder in repo_root_of(cwd).parents:
@@ -371,7 +363,7 @@ def cmd_spawn(a: argparse.Namespace) -> int:
         "tab_named": tab_named,
         "brief": brief_path.as_posix(),
         "needs_owner": dialog and f"{dialog}: show the owner `hc read {address}`; never answer it yourself",
-        "next": "hc wait --children any",
+        "next": "end your turn: its reports arrive as messages (docs/orchestration.md step 4)",
     }, indent=2))
     return 2 if dialog else 0
 
@@ -419,6 +411,21 @@ def age(ms: str | int | None) -> str:
     return f"{secs}s" if secs < 120 else f"{secs // 60}m" if secs < 7200 else f"{secs // 3600}h"
 
 
+def missed_report(term: dict, labels: dict) -> bool:
+    """True when the worker's latest finished turn carries no report.
+
+    hc's `turn` counts *finished* turns. `report` runs mid-turn and stores the counter
+    then (k), so its turn ends at k + 1. An idle worker past k + 1 finished a later turn
+    without reporting (verified 2026-11-23: report_turn 0, turn 1 after that turn ended).
+    """
+    if "chief.state" not in labels:
+        return True
+    try:
+        return int(term.get("turn")) > int(labels.get("chief.report_turn", "")) + 1
+    except (TypeError, ValueError):
+        return False  # a report from before turn tracking: don't guess
+
+
 def cmd_board(a: argparse.Namespace) -> int:
     rows = []
     for term in staff_terminals(a.all):
@@ -433,7 +440,13 @@ def cmd_board(a: argparse.Namespace) -> int:
             hc_status = "silent"
             labels = {**labels, "chief.note": f"no report after {int(silent_s)}s: "
                       + (f"{dialog} (show the owner)" if dialog else f"read it: hc read {term['address']}")}
-        if report in NEEDS_CHIEF or hc_status in ("blocked", "error", "silent") or hc_status.startswith("exited"):
+        elif term.get("state") == "live" and hc_status in ("idle", "done") and missed_report(term, labels):
+            # The worker finished a turn and sent nothing: done, stuck or asking in its own
+            # tab, the chief can't tell which without looking.
+            hc_status = "no-report"
+            labels = {**labels, "chief.note": f"turn {term.get('turn')} ended without a report: "
+                      f"hc read {term['address']} --lines 60"}
+        if report in NEEDS_CHIEF or hc_status in ("blocked", "error", "silent", "no-report") or hc_status.startswith("exited"):
             bucket = 0
         elif report == "ready":
             bucket = 1
@@ -485,7 +498,8 @@ def cmd_report(a: argparse.Namespace) -> int:
     now_ms = str(int(time.time() * 1000))
 
     run(["hc", "label", me, f"chief.state={a.state}", f"chief.note={note}",
-         f"chief.details={details}", f"chief.report_ms={now_ms}", "--json"])
+         f"chief.details={details}", f"chief.report_ms={now_ms}",
+         f"chief.report_turn={term.get('turn', '')}", "--json"])
     with (worker_dir(name) / "reports.jsonl").open("a", encoding="utf-8") as log:
         log.write(json.dumps({"ms": int(now_ms), "state": a.state, "note": note, "details": details}) + "\n")
 
@@ -509,7 +523,7 @@ def main(argv: list[str] | None = None) -> int:
 
     s = sub.add_parser("spawn", help="start a staff worker in its own Herdr tab")
     s.add_argument("name", help="unique worker name: 1-32 of a-z 0-9 - _")
-    s.add_argument("--lane", required=True, choices=sorted(LANES))
+    s.add_argument("--lane", default="omp", choices=sorted(LANES), help="default omp (docs/agents.md)")
     s.add_argument("--cwd", required=True, help="the worker's own worktree")
     s.add_argument("--brief-file")
     s.add_argument("--brief")

@@ -24,8 +24,8 @@ command.
   principles. The core of the job.
 - [`docs/hc.md`](docs/hc.md) — the control plane: `hc` (herdr-core), `herdr-app`, and
   `scripts/staff.py` (spawn, board, respawn, teardown, and the staff `report` command).
-- [`docs/agents.md`](docs/agents.md) — the model roster (codex, omp, Claude lanes) and
-  which task goes to which.
+- [`docs/agents.md`](docs/agents.md) — the lanes: omp for staff (default), Claude for
+  the chief and for staff only with the owner's yes.
 - [`docs/git-worktrees.md`](docs/git-worktrees.md) — conflict-free integration:
   worktree-per-staff, merge-queue discipline, which PR wins, build-from-where.
 - [`projects/`](projects/) — the per-project registry (one folder per managed project).
@@ -42,8 +42,10 @@ command.
 3. **You are the owner's single point of contact — and always reachable.** The owner talks
    to the chief; the chief talks to staff. If the owner ever has to message a staff tab
    directly, the chief has failed. Staff report every turn (`staff.py report`); the chief
-   waits for that news with `hc wait --children any` — never `sleep`, never a polling loop,
-   never a long blocking call — and triages with `staff.py board`, **NEEDS CHIEF first**.
+   gets that news as messages that wake it, so it ends its turn instead of waiting, keeps
+   one background heartbeat while staff are live, and never runs a foreground `sleep`, a
+   polling loop or a long blocking call. On every wake it triages with `staff.py board`,
+   **NEEDS CHIEF first**.
    Surface every staff question to the owner *promptly*, then relay the answer to the same
    worker. Being late here is the one failure the owner notices most.
 4. **Decide on evidence; escalate the rest — never leave a staff stalled.** Answer
