@@ -38,6 +38,11 @@ done. If only the owner can resolve an ambiguity, ask **now**, before spawning a
   **Partition by file/module** so parallel staff don't touch the same code
   (docs/git-worktrees.md). Tasks that share code are sequenced, not parallelised.
 - Pick a lane per task ([`docs/agents.md`](agents.md)) and say it before spawning.
+- **Give each live task its own runtime resources**: an emulator instance, a game client
+  window, host ports, the account it logs in with. `rb ls` shows what exists and who holds
+  it; spawn with `--target` for each (docs/hc.md). Two tasks that need the same instance
+  are sequenced, like tasks that share code. A task with no target is told to touch no
+  device at all.
 - Spawn no more staff than you can triage. A report nobody reads is a stalled worker.
 
 ### 3. Spawn
@@ -198,9 +203,10 @@ went wrong here. Each one names the failure it prevents.
    emulator blindly is the failure this prevents.
 7. **Leftovers have an owner and a limit.** Anything a worker starts (a Frida session, an
    emulator, a server) is that worker's to stop when its turn or task ends. A worker that
-   finishes with background work still running is told to stop it. Long-lived runtime
-   resources are claimed and released through the resource broker once it exists, so a
-   dead worker's claims can be freed.
+   finishes with background work still running is told to stop it. Shared runtime
+   resources (emulators, ports, accounts, the adb server) are leased through the resource
+   broker (`rb`), and a lease dies with its holder's terminal, so a dead worker's claims
+   free themselves.
 8. **Enforce in code what must hold; prompts are advice.** Scope a worker by what it can
    reach (its own worktree, its own target address in its environment, its own MCP config),
    not only by "don't touch X" in the brief. Prompt rules are for judgment calls.

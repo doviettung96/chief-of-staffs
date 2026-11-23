@@ -63,6 +63,14 @@ python $S teardown <name>
   must be visible to the owner (global §10).
 - Waits up to 15 s and checks the screen for a known first-run dialog. Exit 2 with
   `needs_owner` when one holds the worker.
+- **`--target <resource>`** (repeatable: `emu:gs-tlbb`, `port:32123`,
+  `account:gs/default@tlbb`, ...) leases runtime resources to the worker through the
+  resource broker (`D:/Projects/resource_broker`, `rb`). The chief claims them **before**
+  anything starts, all or none (taken: spawn refuses and names the holder), then hands
+  them to the new terminal with `rb transfer`. The brief lists them with their serial and
+  index and tells the worker to use them only through `rb adb` / `rb memuc`. The lease
+  lives on the worker's terminal, so it is freed when the worker exits or is torn down;
+  `respawn` claims the targets (label `chief.targets`) again.
 
 **`report <state> "<note>" [--details <file>]`** (run *by staff*)
 - States: `progress`, `waiting` (needs an answer), `ready` (done **and** verified),
@@ -80,6 +88,8 @@ python $S teardown <name>
   workers, **`no-report`** ones (the worker finished a turn, is idle, and sent no report
   for it: done, stuck, or asking in its own tab) and **silent** ones (no report and no hc
   status at all for 90 s; it names the first-run dialog when it sees one).
+- A worker that **lost a lease** it was spawned with (someone released it) also lands in
+  NEEDS CHIEF. Every row shows what the worker holds (`holds:`).
 - **READY TO INTEGRATE**: `ready` reports. Verify them yourself before trusting them.
 - **WORKING**: everything else.
 

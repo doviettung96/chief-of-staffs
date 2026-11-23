@@ -34,7 +34,8 @@ command.
 ## Core rules (the load-bearing ones)
 
 1. **Spawn staff only via `python scripts/staff.py spawn`**, each in its own git worktree
-   + branch and its own Herdr tab — never via the chief's own sub-agent/Task tool.
+   + branch, its own Herdr tab, and its own runtime resources leased with `--target`
+   (resource broker, `D:/Projects/resource_broker`) — never via the chief's own sub-agent/Task tool.
    Sub-agents are summoned by *staff*, not the chief. **One exception:** a read-only
    subagent that answers a question about a worker from its session and worktree
    (`staff.py session`, docs/orchestration.md "Asking about a worker"). It does no work.

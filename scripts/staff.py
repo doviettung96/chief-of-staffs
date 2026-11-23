@@ -37,6 +37,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 STATE_DIR = Path(os.environ.get("CHIEF_STATE_DIR") or Path.home() / ".chief-of-staff" / "staff")
+# The resource broker (D:/Projects/resource_broker): leases on emulators, ports, accounts.
+RB_SCRIPT = Path(os.environ.get("RB_SCRIPT") or "D:/Projects/resource_broker/rb.py")
 
 ROLE_LABEL = "chief.role=staff"
 STATES = ("progress", "waiting", "ready", "blocked", "failed")
@@ -247,7 +249,7 @@ owner talks to the chief, and nobody watches your tab.
   prompt): never accept them. Report `blocked` with the prompt text or fingerprint.
 - Do not start other agents or terminals unless this brief says so.
 - Kill only processes you started, by PID. Never by image name, never a process tree.
-{workspace}
+{resources}{workspace}
 Your brief file (re-read it after a restart): `{brief_path}`
 """
 
@@ -265,7 +267,52 @@ def workspace_rules(cwd: Path) -> Path | None:
     return None
 
 
-def write_brief(name: str, chief: str, body: str, cwd: Path) -> Path:
+def resources_block(targets: list[str]) -> str:
+    """What the worker holds, and the only way to use it: through rb."""
+    rb = f'python "{RB_SCRIPT.as_posix()}"'
+    if not targets:
+        return ("- **No runtime resources are leased to you.** Touch no emulator, game client, device,\n"
+                "  port or account. If the task turns out to need one, report `waiting` and say which.\n")
+    info = {d["resource"]: d["info"] for d in rb_json("ls", "--json")}
+    lines = "\n".join(f"  - `{t}`" + (f" ({info[t]})" if info.get(t) else "") for t in targets)
+    return (
+        f"- **Your resources**, leased to you by the resource broker (released when you exit):\n{lines}\n"
+        f"  Use them **only through rb**, never by calling `adb.exe` / `memuc.exe` directly:\n"
+        f"  `{rb} adb -s <serial> ...`, `{rb} memuc <command> -i <index>`. A new host port:\n"
+        f"  `{rb} port`. Logging in: `{rb} claim account:<ref>@<game>`, then\n"
+        f"  `{rb} creds account:<ref>@<game>`. Anything else: `{rb} claim <resource>` (`--wait` to\n"
+        f"  queue). `rb` exit 3 means someone else holds it: report `blocked`, never work around it.\n"
+    )
+
+
+def rb_run(*args: str, check: bool = True) -> subprocess.CompletedProcess:
+    proc = run([sys.executable, str(RB_SCRIPT), *args], check=False)
+    if check and proc.returncode != 0:
+        raise StaffError(f"rb {' '.join(args)}: {(proc.stderr or proc.stdout).strip()[:300]}")
+    return proc
+
+
+def rb_json(*args: str):
+    return json.loads(rb_run(*args).stdout)
+
+
+def claim_for_worker(targets: list[str], chief: str):
+    """Claim `targets` for the chief now (all or none); returns hand_over(address)."""
+    if targets:
+        rb_run("--holder", chief, "claim", *targets)
+
+    def hand_over(address: str | None) -> None:
+        if not targets:
+            return
+        if address:
+            rb_run("--holder", chief, "transfer", *targets, "--to", address)
+        else:  # launch failed: give them back
+            rb_run("--holder", chief, "release", *targets, check=False)
+
+    return hand_over
+
+
+def write_brief(name: str, chief: str, body: str, cwd: Path, targets: list[str] | None = None) -> Path:
     path = worker_dir(name) / "brief.md"
     shared = workspace_rules(cwd)
     workspace = (
@@ -281,6 +328,7 @@ def write_brief(name: str, chief: str, body: str, cwd: Path) -> Path:
         note_max=NOTE_MAX,
         brief_path=path.as_posix(),
         workspace=workspace,
+        resources=resources_block(targets or []),
     )
     path.write_text(body.rstrip() + "\n" + protocol, encoding="utf-8")
     return path
@@ -343,13 +391,19 @@ def cmd_spawn(a: argparse.Namespace) -> int:
         raise StaffError("give the brief with --brief-file or --brief")
 
     chief = chief_address()
-    brief_path = write_brief(a.name, chief, body, cwd)
-    root = repo_root_of(cwd)
-    space = a.space or ensure_space(a.space_name or root.name, root)
-    argv = lane_argv(a.lane, "start", a.model) + list(a.agent_arg or []) + [first_message(a.name, brief_path)]
-    result = launch(a.name, a.lane, cwd, argv, space, {"chief.branch": git_branch(cwd)})
+    targets = sorted({t.strip() for t in (a.target or []) if t.strip()})
+    hand_over = claim_for_worker(targets, chief)  # refuses before anything starts
+    address = None
+    try:
+        brief_path = write_brief(a.name, chief, body, cwd, targets)
+        root = repo_root_of(cwd)
+        space = a.space or ensure_space(a.space_name or root.name, root)
+        argv = lane_argv(a.lane, "start", a.model) + list(a.agent_arg or []) + [first_message(a.name, brief_path)]
+        extra = {"chief.branch": git_branch(cwd), **({"chief.targets": ",".join(targets)} if targets else {})}
+        address = launch(a.name, a.lane, cwd, argv, space, extra)["address"]
+    finally:
+        hand_over(address)
 
-    address = result["address"]
     tab_named = name_tab(address, a.tab or a.name)
     # Give the agent a moment to boot, then look for a first-run dialog holding it.
     run(["hc", "wait", address, "--timeout", "15", "--json"], check=False)
@@ -364,6 +418,7 @@ def cmd_spawn(a: argparse.Namespace) -> int:
         "space": space,
         "tab_named": tab_named,
         "brief": brief_path.as_posix(),
+        "targets": targets,
         "needs_owner": dialog and f"{dialog}: show the owner `hc read {address}`; never answer it yourself",
         "next": "end your turn: its reports arrive as messages (docs/orchestration.md step 4)",
     }, indent=2))
@@ -385,13 +440,20 @@ def cmd_respawn(a: argparse.Namespace) -> int:
     brief_path = STATE_DIR / a.name / "brief.md"
     if not brief_path.is_file():
         raise StaffError(f"brief for {a.name} is gone: {brief_path}")
+    # Its leases died with its terminal: take its targets back before it restarts.
+    targets = [t for t in labels.get("chief.targets", "").split(",") if t]
+    hand_over = claim_for_worker(targets, chief_address())
     run(["hc", "rm", term["address"]], check=False)
     argv = lane_argv(lane, "resume", a.model) + [recovery_message(a.name, brief_path)]
     keep = {k: v for k, v in labels.items() if k.startswith("chief.") and k not in ("chief.chief",)}
     keep["chief.restarts"] = str(int(labels.get("chief.restarts", "0")) + 1)
-    result = launch(a.name, lane, Path(cwd), argv, space, keep)
-    name_tab(result["address"], a.name)
-    print(json.dumps({"name": a.name, "address": result["address"], "lane": lane, "resumed_in": cwd}, indent=2))
+    address = None
+    try:
+        address = launch(a.name, lane, Path(cwd), argv, space, keep)["address"]
+    finally:
+        hand_over(address)
+    name_tab(address, a.name)
+    print(json.dumps({"name": a.name, "address": address, "lane": lane, "resumed_in": cwd, "targets": targets}, indent=2))
     return 0
 
 
@@ -448,7 +510,13 @@ def cmd_board(a: argparse.Namespace) -> int:
             hc_status = "no-report"
             labels = {**labels, "chief.note": f"turn {term.get('turn')} ended without a report: "
                       f"hc read {term['address']} --lines 60"}
-        if report in NEEDS_CHIEF or hc_status in ("blocked", "error", "silent", "no-report") or hc_status.startswith("exited"):
+        holds = {h for h in labels.get("rb.holds", "").split(",") if h}
+        lost = [t for t in labels.get("chief.targets", "").split(",") if t and t not in holds]
+        if lost and term.get("state") == "live":
+            labels = {**labels, "chief.note": f"lost its lease on {', '.join(lost)} (released?): "
+                      f"rb ls, then re-claim or stop it. " + labels.get("chief.note", "")}
+        if (report in NEEDS_CHIEF or hc_status in ("blocked", "error", "silent", "no-report")
+                or hc_status.startswith("exited") or (lost and term.get("state") == "live")):
             bucket = 0
         elif report == "ready":
             bucket = 1
@@ -474,6 +542,8 @@ def cmd_board(a: argparse.Namespace) -> int:
             print(f"      {labels['chief.note']}")
         if labels.get("chief.details"):
             print(f"      details: {labels['chief.details']}")
+        if labels.get("rb.holds"):
+            print(f"      holds: {labels['rb.holds']}")
     return 0
 
 
@@ -586,6 +656,8 @@ def cmd_session(a: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):  # notes carry non-ASCII; never the ANSI codepage
+        stream.reconfigure(encoding="utf-8", errors="replace")
     p = argparse.ArgumentParser(prog="staff.py", description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -600,6 +672,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--space-name", help="Herdr space name to find or create")
     s.add_argument("--tab", help="tab label (default: the worker name)")
     s.add_argument("--agent-arg", action="append", help="extra argument for the agent CLI (repeatable)")
+    s.add_argument("--target", action="append",
+                   help="a resource to lease to the worker via rb (repeatable): emu:gs-tlbb, port:32123, ...")
     s.set_defaults(func=cmd_spawn)
 
     s = sub.add_parser("respawn", help="restart a dead worker in its folder, resuming its session")
