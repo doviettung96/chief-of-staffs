@@ -70,7 +70,8 @@ next report wakes you.
 - **What wakes nobody** is a worker that hangs, or ends a turn without reporting. The
   board flags both (`silent`, `no-report`), but only when someone looks. So while staff
   are live, keep one background timer running as a heartbeat (in Claude Code: a Bash
-  `sleep 1800` with `run_in_background`; its end wakes you). When it fires, run the board
+  `sleep 1800` with `run_in_background`; its end wakes an idle chief, verified
+  2026-11-23). When it fires, run the board
   and start the next one. Keep only one.
 - **Need to block on one thing?** (a build you must see before replying) `hc wait <t>
   --timeout <s>` is fine. Never `sleep` in the foreground, never loop on `hc ls`.
