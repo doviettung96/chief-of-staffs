@@ -134,6 +134,40 @@ The chief owns the other half:
 | only the targets in the brief | give every worker its own target, and say which in the brief |
 | never accept an approval (UAC Bridge `409`, a tool prompt) | show the owner, never accept it either |
 
+## Asking about a worker
+
+A report answers "where are you and do you need me?". For anything else ("did it try
+X?", "what did it find about Y?", "is its claim true?", or the owner's "what is X doing?")
+the chief **does not read the worker's session itself**. Whatever the chief reads stays in
+its context for the rest of its session, and session files are big (omp sessions on this
+machine: median 1 MB, 90th percentile 21 MB, because they keep the history from before
+every compaction). Nor does it `hc send` the question: that puts a turn into the worker's
+own conversation and interrupts it.
+
+Instead, a **read-only subagent** reads for the chief and returns only the answer; its
+context is thrown away when it finishes:
+
+1. `python scripts/staff.py session <name>` prints the worker's `session_file` (omp or
+   Claude, found by its folder), `session_mb`, `worktree`, `branch`, `brief` and `reports`.
+2. Start a subagent (Claude Code: the Agent tool, the read-only `Explore` type) with those
+   paths and the question:
+
+   > Answer one question about staff worker `<name>`. You are read-only: no edits, no git
+   > command that changes anything, no `hc send`, never start or message a terminal.
+   > Sources: session `<session_file>` (`<session_mb>` MB, JSONL; don't load it whole:
+   > grep it, read the latest compaction summary and the last entries first), worktree
+   > `<worktree>` (branch `<branch>`), brief `<brief>`, reports `<reports>`.
+   > Question: `<question>`.
+   > Answer in at most 10 lines, say where you found it (session entry, file, commit),
+   > and say "not found" rather than guess.
+
+3. Use the answer; verify anything you act on, as with a report.
+
+A quick look is still fine without a subagent: `hc read <name> --lines 40` for its
+current screen, or `board` for its last report. A subagent can also check facts in the
+worktree, which a fork of the worker cannot. The session only holds what was saved, so a
+turn still in flight is invisible until it ends.
+
 ## Operating principles
 
 These came from studying other orchestrators (herd, DeepSeek's dsh-superagent) against what

@@ -89,6 +89,13 @@ own, so "continue the last session here" means its own session. It sends a **rec
 re-read the brief, check git and every outside effect before repeating anything. For a live
 worker it refuses: send it the next step instead.
 
+**`session <name>`** prints where everything about a worker lives: its session file (omp:
+the newest file under `~/.omp/agent/sessions` whose `session` line has the worker's folder;
+Claude: the live process's transcript, else the newest in its project folder) with its size,
+plus worktree, branch, brief and reports. For a read-only subagent that answers questions
+about the worker (docs/orchestration.md "Asking about a worker"). Exit 2 if no session
+file is found.
+
 **`teardown <name>`**: `hc kill` + `hc rm`. The worktree is left for you to remove after
 the merge.
 

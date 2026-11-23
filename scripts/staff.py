@@ -7,6 +7,7 @@ The chief uses it to start, watch, restart and tear down staff. Staff use it to 
   staff.py board [--all]
   staff.py respawn <name>
   staff.py teardown <name>
+  staff.py session <name>          # where its session/worktree/brief live, for a subagent
   staff.py report <state> "<note>" [--details <file>]     # run BY a staff worker
 
 Design (docs/orchestration.md has the why):
@@ -28,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -514,6 +516,72 @@ def cmd_report(a: argparse.Namespace) -> int:
     raise StaffError(f"report recorded on labels but delivery to {chief} failed: {proc.stderr.strip()[:300]}")
 
 
+def same_dir(a: str | Path, b: str | Path) -> bool:
+    return os.path.normcase(os.path.normpath(str(a))) == os.path.normcase(os.path.normpath(str(b)))
+
+
+def omp_session_file(cwd: str) -> Path | None:
+    """Newest omp session started in `cwd`. Each file's `session` line records its cwd."""
+    root = Path.home() / ".omp" / "agent" / "sessions"
+    best = None
+    for f in root.glob("*/*.jsonl"):
+        try:
+            with f.open(encoding="utf-8", errors="replace") as fh:
+                for _, line in zip(range(4), fh):
+                    entry = json.loads(line)
+                    if entry.get("type") == "session":
+                        if same_dir(entry.get("cwd", ""), cwd) and (best is None or f.stat().st_mtime > best.stat().st_mtime):
+                            best = f
+                        break
+        except (OSError, ValueError):
+            continue
+    return best
+
+
+def claude_session_file(term: dict, cwd: str) -> Path | None:
+    """The live worker's own transcript, else the newest one in its project folder."""
+    projects = Path.home() / ".claude" / "projects"
+    pid = (term.get("foreground") or {}).get("pid")
+    meta = Path.home() / ".claude" / "sessions" / f"{pid}.json"
+    if pid and meta.is_file():
+        try:
+            sid = json.loads(meta.read_text(encoding="utf-8")).get("sessionId")
+            hits = list(projects.glob(f"*/{sid}.jsonl")) if sid else []
+            if hits:
+                return hits[0]
+        except (OSError, ValueError):
+            pass
+    folder = projects / re.sub(r"[^A-Za-z0-9]", "-", cwd)
+    files = sorted(folder.glob("*.jsonl"), key=lambda f: f.stat().st_mtime) if folder.is_dir() else []
+    return files[-1] if files else None
+
+
+def cmd_session(a: argparse.Namespace) -> int:
+    """Where everything about a worker lives, for a read-only subagent to answer from."""
+    term = find_staff(a.name)
+    if term is None:
+        raise StaffError(f"no staff worker named {a.name}")
+    labels = labels_of(term)
+    lane = labels.get("chief.lane", "")
+    cwd = labels.get("chief.cwd") or term.get("cwd") or ""
+    session = omp_session_file(cwd) if lane == "omp" else claude_session_file(term, cwd) if lane == "claude" else None
+    wdir = STATE_DIR / a.name
+    info = {
+        "name": a.name,
+        "lane": lane,
+        "address": term.get("address"),
+        "state": term.get("state"),
+        "worktree": cwd,
+        "branch": labels.get("chief.branch", ""),
+        "brief": (wdir / "brief.md").as_posix(),
+        "reports": (wdir / "reports.jsonl").as_posix(),
+        "session_file": session.as_posix() if session else None,
+        "session_mb": round(session.stat().st_size / 2**20, 1) if session else None,
+    }
+    print(json.dumps(info, indent=2))
+    return 0 if session else 2
+
+
 # --------------------------------------------------------------------------- main
 
 
@@ -546,6 +614,10 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("board", help="every staff worker, the ones that need the chief first")
     s.add_argument("--all", action="store_true", help="include finished workers")
     s.set_defaults(func=cmd_board)
+
+    s = sub.add_parser("session", help="a worker's session file, worktree, brief and reports (for a read-only subagent)")
+    s.add_argument("name")
+    s.set_defaults(func=cmd_session)
 
     s = sub.add_parser("report", help="(staff) report your state to the chief")
     s.add_argument("state", choices=STATES)
